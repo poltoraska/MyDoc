@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
+import bounceClick
 import coil.compose.AsyncImage
 import com.poltorashka.documents.data.AppDatabase
 import java.io.File
@@ -135,10 +137,20 @@ fun DocumentDetailScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit
                 )
-                IconButton(
-                    onClick = { imageToShow = null },
-                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
-                ) { Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White) }
+                // Кнопка закрытия с пружинкой и фоном
+                Surface(
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.5f),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                        .size(48.dp)
+                        .bounceClick { imageToShow = null }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White)
+                    }
+                }
             }
         }
     }
@@ -164,42 +176,87 @@ fun DocumentDetailScreen(
                 ) {
                     // Панель с кнопками навигации и действий
                     Box(modifier = Modifier.fillMaxWidth()) {
-                        // Кнопка назад / отмена (слева)
-                        IconButton(
-                            onClick = { if (isEditing) isEditing = false else onBackClick() },
-                            modifier = Modifier.align(Alignment.CenterStart).offset(x = (-12).dp)
+
+                        // НОВАЯ КНОПКА "НАЗАД" С ПРУЖИНКОЙ
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .size(44.dp)
+                                .bounceClick { if (isEditing) isEditing = false else onBackClick() }
                         ) {
-                            Icon(
-                                imageVector = if (isEditing) Icons.Filled.Close else Icons.Filled.ArrowBack,
-                                contentDescription = if (isEditing) "Отмена" else "Назад",
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (isEditing) Icons.Filled.Close else Icons.Filled.ArrowBack,
+                                    contentDescription = if (isEditing) "Отмена" else "Назад",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
 
-                        // Кнопки действий (справа)
+                        // НОВЫЕ КНОПКИ ДЕЙСТВИЙ
                         Row(
-                            modifier = Modifier.align(Alignment.CenterEnd).offset(x = 12.dp),
+                            modifier = Modifier.align(Alignment.CenterEnd),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             if (isEditing) {
-                                TextButton(onClick = {
-                                    document?.let { doc -> viewModel.updateFields(doc, editedFields.toMap()) }
-                                    isEditing = false
-                                }) {
-                                    Text("Сохранить", color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Bold)
+                                // Кнопка "Сохранить" с пружинкой
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .height(44.dp)
+                                        .bounceClick {
+                                            document?.let { doc -> viewModel.updateFields(doc, editedFields.toMap()) }
+                                            isEditing = false
+                                        }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) {
+                                        Text("Сохранить", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
+                                    }
                                 }
                             } else {
-                                IconButton(onClick = { isEditing = true }) {
-                                    Icon(Icons.Filled.Edit, contentDescription = "Редактировать", tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                                // Кнопка "Удалить" с пружинкой
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .bounceClick { showDeleteDocDialog = true }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Delete,
+                                            contentDescription = "Удалить",
+                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
-                                IconButton(onClick = { showDeleteDocDialog = true }) {
-                                    Icon(Icons.Filled.Delete, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                                // Кнопка "Редактировать" с пружинкой
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .bounceClick { isEditing = true }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Edit,
+                                            contentDescription = "Редактировать",
+                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
                     // Заголовок (Тип документа)
                     Text(
@@ -209,8 +266,6 @@ fun DocumentDetailScreen(
                         color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    // Подзаголовок
-
                 }
             }
 
@@ -251,8 +306,18 @@ fun DocumentDetailScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Файлы (${doc.photoUris.size})", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-                        TextButton(onClick = { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }) {
-                            Text("+ Добавить")
+
+                        // НОВАЯ КНОПКА "ДОБАВИТЬ" С ПРУЖИНКОЙ
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier
+                                .height(36.dp)
+                                .bounceClick { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+                        ) {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 16.dp)) {
+                                Text("+ Добавить", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            }
                         }
                     }
 
@@ -274,12 +339,23 @@ fun DocumentDetailScreen(
                                             .clickable { imageToShow = path },
                                         contentScale = ContentScale.Crop
                                     )
-                                    IconButton(
-                                        onClick = { imageToDelete = path },
-                                        modifier = Modifier.align(Alignment.TopEnd)
+                                    // КРЕСТИК УДАЛЕНИЯ ФОТО С ПРУЖИНКОЙ
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.errorContainer,
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(6.dp)
+                                            .size(32.dp)
+                                            .bounceClick { imageToDelete = path }
                                     ) {
-                                        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.errorContainer) {
-                                            Icon(Icons.Filled.Close, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.onErrorContainer)
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                Icons.Filled.Close,
+                                                contentDescription = "Удалить",
+                                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                                modifier = Modifier.size(20.dp)
+                                            )
                                         }
                                     }
                                 }

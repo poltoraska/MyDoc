@@ -7,7 +7,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -80,11 +79,19 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.material.icons.filled.Lock
+import com.poltorashka.documents.R
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
+import android.view.SoundEffectConstants
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import bounceClick
 
 fun getDynamicGreeting(): String {
     val hour = java.time.LocalTime.now().hour
@@ -515,9 +522,9 @@ fun ToolbarNavItem(isSelected: Boolean, icon: ImageVector, label: String, onClic
 @Composable
 fun PinDots(pinLength: Int, isError: Boolean) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(20.dp), // Чуть раздвинули точки
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(vertical = 32.dp)
+        modifier = Modifier.padding(vertical = 16.dp)
     ) {
         repeat(4) { index ->
             val isFilled = index < pinLength
@@ -527,7 +534,7 @@ fun PinDots(pinLength: Int, isError: Boolean) {
 
             Box(
                 modifier = Modifier
-                    .size(24.dp)
+                    .size(20.dp) // Точки чуть-чуть аккуратнее
                     .background(color, CircleShape)
             )
         }
@@ -536,6 +543,8 @@ fun PinDots(pinLength: Int, isError: Boolean) {
 
 @Composable
 fun CustomNumpad(
+    isBiometricEnabled: Boolean,
+    onBiometricClick: () -> Unit,
     onNumberClick: (String) -> Unit,
     onBackspaceClick: () -> Unit
 ) {
@@ -543,29 +552,49 @@ fun CustomNumpad(
         listOf("1", "2", "3"),
         listOf("4", "5", "6"),
         listOf("7", "8", "9"),
-        listOf("", "0", "⌫") // Пустая строка для выравнивания нуля
+        listOf("bio", "0", "⌫")
     )
+
+    // Единый размер для всех кнопок (УВЕЛИЧЕНО)
+    val buttonSize = 84.dp
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         rows.forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 row.forEach { key ->
-                    if (key.isEmpty()) {
-                        Spacer(modifier = Modifier.size(72.dp)) // Пустое место вместо кнопки
+                    if (key == "bio") {
+                        if (isBiometricEnabled) {
+                            // Кнопка биометрии
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.Transparent,
+                                modifier = Modifier
+                                    .size(buttonSize)
+                                    .bounceClick { onBiometricClick() }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_fingerprint),
+                                        contentDescription = "Биометрия",
+                                        modifier = Modifier.size(50.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        } else {
+                            // Распорка теперь тоже размера buttonSize
+                            Spacer(modifier = Modifier.size(buttonSize))
+                        }
                     } else if (key == "⌫") {
                         Surface(
                             shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surfaceVariant, // Немного другой цвет для стирания
+                            color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .clickable { onBackspaceClick() }
+                                .size(buttonSize)
+                                .bounceClick { onBackspaceClick() }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Filled.Clear, contentDescription = "Стереть", modifier = Modifier.size(28.dp))
+                                Icon(Icons.Filled.Clear, contentDescription = "Стереть", modifier = Modifier.size(32.dp))
                             }
                         }
                     } else {
@@ -573,15 +602,14 @@ fun CustomNumpad(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.secondaryContainer,
                             modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .clickable { onNumberClick(key) }
+                                .size(buttonSize)
+                                .bounceClick { onNumberClick(key) }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text(
                                     text = key,
-                                    fontSize = 32.sp,
-                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 36.sp, // Увеличили шрифт цифр
+                                    fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
                             }
@@ -597,60 +625,6 @@ fun CustomNumpad(
 // ЭКРАН АВТОРИЗАЦИИ
 // ---------------------------------------------------------------------------
 
-// В параметрах Numpad добавлен флаг биометрии и функцию клика по иконке
-@Composable
-fun CustomNumpad(
-    isBiometricEnabled: Boolean,
-    onBiometricClick: () -> Unit,
-    onNumberClick: (String) -> Unit,
-    onBackspaceClick: () -> Unit
-) {
-    val rows = listOf(
-        listOf("1", "2", "3"),
-        listOf("4", "5", "6"),
-        listOf("7", "8", "9"),
-        listOf("bio", "0", "⌫")
-    )
-
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        rows.forEach { row ->
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                row.forEach { key ->
-                    if (key == "bio") {
-                        if (isBiometricEnabled) {
-                            // Кнопка биометрии
-                            Surface(
-                                shape = CircleShape,
-                                color = Color.Transparent,
-                                modifier = Modifier.size(72.dp).clip(CircleShape).clickable { onBiometricClick() }
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        painter = androidx.compose.ui.res.painterResource(android.R.drawable.ic_secure),
-                                        contentDescription = "Биометрия",
-                                        modifier = Modifier.size(32.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                        } else {
-                            Spacer(modifier = Modifier.size(72.dp))
-                        }
-                    } else if (key == "⌫") {
-                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.size(72.dp).clip(CircleShape).clickable { onBackspaceClick() }) {
-                            Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Clear, contentDescription = "Стереть", modifier = Modifier.size(28.dp)) }
-                        }
-                    } else {
-                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(72.dp).clip(CircleShape).clickable { onNumberClick(key) }) {
-                            Box(contentAlignment = Alignment.Center) { Text(text = key, fontSize = 32.sp, fontWeight = FontWeight.Normal, color = MaterialTheme.colorScheme.onSecondaryContainer) }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 @Composable
 fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () -> Unit) {
     var pinInput by remember { mutableStateOf("") }
@@ -659,7 +633,6 @@ fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () ->
     val context = LocalContext.current
     val activity = context as? FragmentActivity
 
-    // Автоматически запускает сканер при открытии экрана (только один раз)
     LaunchedEffect(Unit) {
         if (isBiometricEnabled && activity != null) {
             showBiometricPrompt(activity, onSuccess)
@@ -676,11 +649,21 @@ fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () ->
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier
+                .fillMaxSize()
+                .systemBarsPadding() // МАГИЯ 1: Убирает черные системные полосы!
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
+            // МАГИЯ 2: Гибкая распорка, которая толкает заголовок чуть ниже центра
+            Spacer(modifier = Modifier.weight(0.3f))
+
+            Icon(
+                imageVector = Icons.Filled.Lock, // Заменил шестеренку на замок, так логичнее для экрана входа
+                contentDescription = null,
+                modifier = Modifier.size(56.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
@@ -690,15 +673,15 @@ fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () ->
                 color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground
             )
 
+            Spacer(modifier = Modifier.height(16.dp))
             PinDots(pinLength = pinInput.length, isError = isError)
-            Spacer(modifier = Modifier.height(32.dp))
+
+            // МАГИЯ 3: Главная распорка. Она забирает всё свободное место и толкает клавиатуру вниз!
+            Spacer(modifier = Modifier.weight(1f))
 
             CustomNumpad(
                 isBiometricEnabled = isBiometricEnabled,
-                onBiometricClick = {
-                    // Ручной вызов по кнопке
-                    if (activity != null) showBiometricPrompt(activity, onSuccess)
-                },
+                onBiometricClick = { if (activity != null) showBiometricPrompt(activity, onSuccess) },
                 onNumberClick = { digit ->
                     if (pinInput.length < 4 && !isError) {
                         pinInput += digit
@@ -710,6 +693,9 @@ fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () ->
                 },
                 onBackspaceClick = { if (pinInput.isNotEmpty() && !isError) pinInput = pinInput.dropLast(1) }
             )
+
+            // Небольшой отступ снизу, чтобы кнопки не прилипали к самому краю экрана
+            Spacer(modifier = Modifier.height(48.dp))
         }
     }
 }
@@ -734,39 +720,4 @@ fun showBiometricPrompt(activity: FragmentActivity, onSuccess: () -> Unit) {
         .build()
 
     biometricPrompt.authenticate(promptInfo)
-}
-
-fun Modifier.bounceClick(onClick: () -> Unit) = composed {
-    var isPressed by remember { mutableStateOf(false) }
-
-    // Физику: масштаб уменьшается до 92% при нажатии
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "bounce"
-    )
-
-    this
-        .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-        }
-        .pointerInput(Unit) {
-            awaitPointerEventScope {
-                while (true) {
-                    awaitFirstDown(requireUnconsumed = false)
-                    isPressed = true
-                    waitForUpOrCancellation()
-                    isPressed = false
-                }
-            }
-        }
-        .clickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null,
-            onClick = onClick
-        )
 }

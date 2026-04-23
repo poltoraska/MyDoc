@@ -31,7 +31,11 @@ import kotlinx.coroutines.launch
 @Composable
 fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    val documentTypes = listOf("Паспорт РФ", "Заграничный паспорт", "СНИЛС", "Водительское удостоверение", "ИНН", "Полис ОМС")
+
+    // --- ВОТ ГЛАВНОЕ ИЗМЕНЕНИЕ ---
+    // Берем список всех доступных документов напрямую из нашего нового шаблона
+    val documentTypes = DocumentTemplates.supportedDocumentTypes
+
     var selectedType by remember { mutableStateOf(documentTypes[0]) }
 
     val inputValues = remember { mutableStateMapOf<String, String>() }
