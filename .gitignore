@@ -1,0 +1,21 @@
+# Среда разработки (Android Studio / IntelliJ)
+*.iml
+/.idea/
+.DS_Store
+
+# Сборка и Gradle
+.gradle
+/build/
+*/build/
+.externalNativeBuild
+.cxx
+/captures
+
+# Локальные настройки (пути к SDK и пароли)
+local.properties
+
+# КЛЮЧИ ПОДПИСИ
+*.jks
+*.keystore
+*.p12
+*.key
