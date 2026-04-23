@@ -34,17 +34,17 @@ fun OnboardingScreen(onFinish: () -> Unit) {
     Crossfade(targetState = currentStep, label = "onboarding_animation") { step ->
         when (step) {
             0 -> WelcomeStep(
-                onNext = { currentStep = 1 } // По клику переходим на второй экран
+                onNext = { currentStep = 1 } // По клику переход на второй экран
             )
             1 -> NameSetupStep(
                 onFinish = { name ->
-                    // Если имя ввели, сохраняем его в настройки
+                    // Если имя ввели, сохраняет его в настройки
                     if (name.isNotBlank()) {
                         prefs.userName = name.trim()
                     }
-                    // Отмечаем, что онбординг пройден навсегда
+                    // Отмечает, что онбординг пройден навсегда
                     prefs.isOnboardingCompleted = true
-                    // Сообщаем MainActivity, что можно пускать в приложение
+                    // Сообщает MainActivity, что можно пускать в приложение
                     onFinish()
                 }
             )
@@ -135,7 +135,6 @@ fun WelcomeStep(onNext: () -> Unit) {
     }
 }
 
-// Вспомогательная функция (из первого шага)
 @Composable
 fun FeatureItem(iconRes: Int, text: String) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

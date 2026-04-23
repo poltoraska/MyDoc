@@ -14,28 +14,24 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -56,7 +52,8 @@ fun SettingsScreen(
             AppDatabase.getDatabase(LocalContext.current).folderDao(),
             AppDatabase.getDatabase(LocalContext.current).documentDao()
         )
-    )
+    ),
+    onAboutClick: () -> Unit
 ) {
     val context = LocalContext.current
     val prefs = remember { UserPreferences(context) }
@@ -105,29 +102,51 @@ fun SettingsScreen(
         ) {
 
             // 1. НОВАЯ ШИКАРНАЯ ШАПКА
+            // 1. НОВАЯ ШИКАРНАЯ ШАПКА
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.secondaryContainer,
                 shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
                 shadowElevation = 2.dp
             ) {
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 80.dp, bottom = 24.dp, start = 24.dp, end = 24.dp) // Обычные отступы шапки
+                        .padding(top = 80.dp, bottom = 24.dp, start = 24.dp, end = 24.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween, // Текст налево, кнопка направо
+                    verticalAlignment = Alignment.CenterVertically // Выравнивание по центру по вертикали
                 ) {
-                    Text(
-                        text = "Настройки",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Управление приложением",
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
-                    )
+                    Column {
+                        Text(
+                            text = "Настройки",
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Управление приложением",
+                            fontSize = 18.sp,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                        )
+                    }
+
+                    // Новая кнопка 'i'
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .bounceClick { onAboutClick() }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Outlined.Info,
+                                contentDescription = "О приложении",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
                 }
             }
 

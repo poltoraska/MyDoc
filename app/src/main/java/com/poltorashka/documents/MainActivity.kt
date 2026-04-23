@@ -4,7 +4,6 @@ import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -31,13 +30,8 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -51,7 +45,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -64,33 +57,20 @@ import androidx.navigation.compose.rememberNavController
 import com.poltorashka.documents.data.AppDatabase
 import com.poltorashka.documents.ui.theme.DocumentsTheme
 import androidx.compose.ui.graphics.Color
-import kotlinx.coroutines.delay
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.composed
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.filled.Lock
-import com.poltorashka.documents.R
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
-import android.view.SoundEffectConstants
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.foundation.layout.navigationBarsPadding
 import bounceClick
 
 fun getDynamicGreeting(): String {
@@ -184,7 +164,14 @@ class MainActivity : FragmentActivity() {
                             SettingsScreen(
                                 onBackClick = { navController.popBackStack() },
                                 onHomeClick = { navController.navigate("main") { popUpTo("main") { inclusive = false } } },
-                                onSearchClick = { navController.navigate("search") { launchSingleTop = true } }
+                                onSearchClick = { navController.navigate("search") { launchSingleTop = true } },
+                                onAboutClick = { navController.navigate("about") }
+                            )
+                        }
+
+                        composable("about") {
+                            AboutAppScreen(
+                                onBackClick = { navController.popBackStack() }
                             )
                         }
 
@@ -242,6 +229,7 @@ fun MainScreen(
     val userName = prefs.userName
 
     Scaffold(
+        containerColor = Color.Transparent, // Делаем подложку прозрачной
         bottomBar = {
             CustomFloatingToolbar(
                 activeTab = 0,
@@ -255,25 +243,24 @@ fun MainScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = innerPadding.calculateBottomPadding())
+            // УБРАЛИ padding(bottom) отсюда, чтобы фон не обрезался
         ) {
             // ШИКАРНЫЙ ВЕРХНИЙ БЛОК В СТИЛЕ MATERIAL EXPRESSIVE
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.secondaryContainer, // Красивый акцентный цвет из обоев
+                color = MaterialTheme.colorScheme.secondaryContainer,
                 shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
                 shadowElevation = 2.dp
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 80.dp, bottom = 24.dp) // Большой отступ сверху
+                        .padding(top = 80.dp, bottom = 24.dp)
                 ) {
-                    // Заголовок и приветствие
                     Column(modifier = Modifier.padding(horizontal = 24.dp)) {
                         Text(
                             text = "Мои документы",
-                            fontSize = 32.sp, // Крупный и сочный шрифт
+                            fontSize = 32.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
@@ -287,18 +274,16 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(32.dp))
 
-                    // Лента кнопок-папок переехала сюда, прямо под заголовок
                     if (folders.isNotEmpty()) {
                         LazyRow(
                             modifier = Modifier.fillMaxWidth(),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 24.dp),
+                            contentPadding = PaddingValues(horizontal = 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(folders) { folder ->
                                 val isSelected = activeFolderId == folder.id
 
                                 val containerColor by animateColorAsState(
-                                    // Активная папка берет яркий цвет, а неактивные становятся базового цвета (чтобы выделяться на фоне шапки)
                                     targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                                     label = "color"
                                 )
@@ -336,14 +321,60 @@ fun MainScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
-                    .padding(top = 16.dp) // Отступ между шапкой и карточками
+                    .padding(top = 16.dp)
             ) {
                 if (folders.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Создайте папку в настройках", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // Улучшенное пустое состояние для новых пользователей
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = innerPadding.calculateBottomPadding()),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            shape = RoundedCornerShape(28.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "Перед добавлением первого документа необходимо создать папку в настройках приложения.",
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 15.sp,
+                                    lineHeight = 22.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.height(24.dp))
+                                // Кнопка, которая сразу ведет пользователя куда нужно
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .height(44.dp)
+                                        .bounceClick { onSettingsClick() }
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.padding(horizontal = 24.dp)
+                                    ) {
+                                        Text(
+                                            text = "Открыть настройки",
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 } else if (docs.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
                         Text("В этой папке пока нет документов", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 } else {
@@ -352,6 +383,7 @@ fun MainScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxSize(),
+                        // ПЕРЕНЕСЛИ ОТСТУП СЮДА: Теперь сетка скроллится под прозрачным меню!
                         contentPadding = PaddingValues(bottom = innerPadding.calculateBottomPadding() + 16.dp)
                     ) {
                         gridItems(docs) { doc ->
@@ -381,7 +413,7 @@ fun DocumentCard(title: String, onClick: () -> Unit) {
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = title,
+                text = title.replace(" о ", " о\u00A0"),
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(16.dp),
@@ -410,7 +442,8 @@ fun CustomFloatingToolbar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 40.dp),
+            .navigationBarsPadding() // ДОБАВИЛИ ЗАЩИТУ: меню всегда будет выше системной полоски
+            .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 24.dp), // Слегка уменьшили bottom, так как navigationBarsPadding добавит своего места
         horizontalArrangement = Arrangement.spacedBy(gapBetweenIslands, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically
     ) {

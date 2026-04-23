@@ -1,5 +1,7 @@
 package com.poltorashka.documents
 
+import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +19,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,7 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,6 +56,7 @@ fun DocumentDetailScreen(
 
     val document by viewModel.document.collectAsState()
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current // Менеджер буфера обмена
 
     // Состояния интерфейса
     var imageToShow by remember { mutableStateOf<String?>(null) }
@@ -155,14 +161,54 @@ fun DocumentDetailScreen(
         }
     }
 
-    Scaffold { innerPadding ->
+    Scaffold(
+        // НОВАЯ КНОПКА ПОДЕЛИТЬСЯ (FAB)
+        floatingActionButton = {
+            if (!isEditing && document != null) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp), // Скругленный квадрат как на скриншоте
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shadowElevation = 4.dp,
+                    modifier = Modifier
+                        .size(64.dp)
+                        .bounceClick {
+                            // Собираем все данные в один красивый текст
+                            val shareText = StringBuilder().apply {
+                                append("${document!!.documentType}\n\n")
+                                document!!.fieldsData.forEach { (key, value) ->
+                                    if (value.isNotBlank()) {
+                                        append("$key: $value\n")
+                                    }
+                                }
+                            }.toString()
+
+                            // Вызываем системное меню "Поделиться"
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Поделиться документом"))
+                        }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Filled.Share,
+                            contentDescription = "Поделиться",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+            }
+        }
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(bottom = innerPadding.calculateBottomPadding())
         ) {
-            // --- НОВАЯ ШАПКА В СТИЛЕ MATERIAL EXPRESSIVE ---
+            // --- ШАПКА В СТИЛЕ MATERIAL EXPRESSIVE ---
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.secondaryContainer,
@@ -177,7 +223,6 @@ fun DocumentDetailScreen(
                     // Панель с кнопками навигации и действий
                     Box(modifier = Modifier.fillMaxWidth()) {
 
-                        // НОВАЯ КНОПКА "НАЗАД" С ПРУЖИНКОЙ
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.surface,
@@ -195,14 +240,12 @@ fun DocumentDetailScreen(
                             }
                         }
 
-                        // НОВЫЕ КНОПКИ ДЕЙСТВИЙ
                         Row(
                             modifier = Modifier.align(Alignment.CenterEnd),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             if (isEditing) {
-                                // Кнопка "Сохранить" с пружинкой
                                 Surface(
                                     shape = CircleShape,
                                     color = MaterialTheme.colorScheme.primary,
@@ -218,7 +261,6 @@ fun DocumentDetailScreen(
                                     }
                                 }
                             } else {
-                                // Кнопка "Удалить" с пружинкой
                                 Surface(
                                     shape = CircleShape,
                                     color = MaterialTheme.colorScheme.primary,
@@ -235,7 +277,6 @@ fun DocumentDetailScreen(
                                         )
                                     }
                                 }
-                                // Кнопка "Редактировать" с пружинкой
                                 Surface(
                                     shape = CircleShape,
                                     color = MaterialTheme.colorScheme.primary,
@@ -258,9 +299,9 @@ fun DocumentDetailScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Заголовок (Тип документа)
+                    // Заголовок (Тип документа) с приклеенным "о"
                     Text(
-                        text = if (isEditing) "Редактирование" else (document?.documentType ?: "Загрузка..."),
+                        text = if (isEditing) "Редактирование" else (document?.documentType?.replace(" о ", " о\u00A0") ?: "Загрузка..."),
                         fontSize = 32.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -294,7 +335,16 @@ fun DocumentDetailScreen(
                                 }
                             } else {
                                 doc.fieldsData.forEach { (label, value) ->
-                                    DetailField(label = label, value = value)
+                                    DetailField(
+                                        label = label,
+                                        value = value,
+                                        onCopy = { textToCopy ->
+                                            if (textToCopy.isNotBlank()) {
+                                                clipboardManager.setText(AnnotatedString(textToCopy))
+                                                Toast.makeText(context, "Скопировано", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -307,7 +357,6 @@ fun DocumentDetailScreen(
                     ) {
                         Text("Файлы (${doc.photoUris.size})", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
 
-                        // НОВАЯ КНОПКА "ДОБАВИТЬ" С ПРУЖИНКОЙ
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.secondaryContainer,
@@ -339,7 +388,6 @@ fun DocumentDetailScreen(
                                             .clickable { imageToShow = path },
                                         contentScale = ContentScale.Crop
                                     )
-                                    // КРЕСТИК УДАЛЕНИЯ ФОТО С ПРУЖИНКОЙ
                                     Surface(
                                         shape = RoundedCornerShape(12.dp),
                                         color = MaterialTheme.colorScheme.errorContainer,
@@ -362,16 +410,25 @@ fun DocumentDetailScreen(
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(32.dp))
+
+                    // Дополнительный отступ снизу, чтобы текст не прятался за кнопкой "Поделиться"
+                    Spacer(modifier = Modifier.height(80.dp))
                 }
             }
         }
     }
 }
 
+// ОБНОВЛЕННЫЙ DETAIL FIELD С ФУНКЦИЕЙ КОПИРОВАНИЯ
 @Composable
-fun DetailField(label: String, value: String) {
-    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+fun DetailField(label: String, value: String, onCopy: (String) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .bounceClick { onCopy(value) } // Наша пружинка при клике на строчку!
+            .padding(vertical = 8.dp, horizontal = 4.dp)
+    ) {
         Text(text = label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         Text(text = value, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
     }
