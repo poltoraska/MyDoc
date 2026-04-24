@@ -324,8 +324,16 @@ fun DocumentDetailScreen(
                         shape = RoundedCornerShape(28.dp)
                     ) {
                         Column(modifier = Modifier.padding(20.dp)) {
+                            // 1. Берем эталонный порядок полей из нашего шаблона
+                            val orderedLabels = com.poltorashka.documents.data.DocumentTemplates.getFieldsForType(doc.documentType)
+
+                            // 2. Добавляем поля, которые есть в документе, но вдруг не попали в шаблон (защита от багов)
+                            val extraLabels = doc.fieldsData.keys.filter { !orderedLabels.contains(it) }
+                            val finalLabels = orderedLabels + extraLabels
+
                             if (isEditing) {
-                                doc.fieldsData.keys.forEach { label ->
+                                // Отрисовываем поля для редактирования в правильном порядке
+                                finalLabels.forEach { label ->
                                     OutlinedTextField(
                                         value = editedFields[label] ?: "",
                                         onValueChange = { newValue -> editedFields[label] = newValue },
@@ -334,17 +342,22 @@ fun DocumentDetailScreen(
                                     )
                                 }
                             } else {
-                                doc.fieldsData.forEach { (label, value) ->
-                                    DetailField(
-                                        label = label,
-                                        value = value,
-                                        onCopy = { textToCopy ->
-                                            if (textToCopy.isNotBlank()) {
-                                                clipboardManager.setText(AnnotatedString(textToCopy))
-                                                Toast.makeText(context, "Скопировано", Toast.LENGTH_SHORT).show()
+                                // Отрисовываем поля для просмотра в правильном порядке
+                                finalLabels.forEach { label ->
+                                    // Показываем поле только если в нем реально есть текст (или если оно есть в ключах)
+                                    if (doc.fieldsData.containsKey(label)) {
+                                        val value = doc.fieldsData[label] ?: ""
+                                        DetailField(
+                                            label = label,
+                                            value = value,
+                                            onCopy = { textToCopy ->
+                                                if (textToCopy.isNotBlank()) {
+                                                    clipboardManager.setText(AnnotatedString(textToCopy))
+                                                    Toast.makeText(context, "Скопировано", Toast.LENGTH_SHORT).show()
+                                                }
                                             }
-                                        }
-                                    )
+                                        )
+                                    }
                                 }
                             }
                         }
