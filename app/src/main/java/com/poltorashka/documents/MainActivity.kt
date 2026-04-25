@@ -65,6 +65,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material.icons.filled.Lock
@@ -72,6 +73,22 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.navigationBarsPadding
 import bounceClick
+import java.util.Calendar
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 
 fun getDynamicGreeting(): String {
     val hour = java.time.LocalTime.now().hour
@@ -80,6 +97,17 @@ fun getDynamicGreeting(): String {
         in 12..16 -> "Добрый день,"
         in 17..22 -> "Добрый вечер,"
         else -> "Доброй ночи,"
+    }
+}
+
+
+fun getGreetingIconResId(): Int {
+    val calendar = Calendar.getInstance()
+    return when (calendar.get(Calendar.HOUR_OF_DAY)) {
+        in 6..11 -> R.drawable.wolf1   // Утро
+        in 12..17 -> R.drawable.wolf2  // День
+        in 18..22 -> R.drawable.wolf3  // Вечер
+        else -> R.drawable.wolf4       // Ночь
     }
 }
 
@@ -229,7 +257,7 @@ fun MainScreen(
     val userName = prefs.userName
 
     Scaffold(
-        containerColor = Color.Transparent, // Делаем подложку прозрачной
+        containerColor = Color.Transparent,
         bottomBar = {
             CustomFloatingToolbar(
                 activeTab = 0,
@@ -243,7 +271,6 @@ fun MainScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-            // УБРАЛИ padding(bottom) отсюда, чтобы фон не обрезался
         ) {
             // ШИКАРНЫЙ ВЕРХНИЙ БЛОК В СТИЛЕ MATERIAL EXPRESSIVE
             Surface(
@@ -265,11 +292,52 @@ fun MainScreen(
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "${getDynamicGreeting()} ${if (userName.isNotEmpty()) userName + "!" else "!"}",
-                            fontSize = 18.sp,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "${getDynamicGreeting()} ${if (userName.isNotEmpty()) userName + "!" else "!"}",
+                                fontSize = 18.sp,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            // --- МАГИЯ АНИМАЦИИ ВОЛКА ---
+                            var isAnimated by remember { mutableStateOf(false) }
+
+                            // Запускает анимацию сразу при появлении экрана
+                            LaunchedEffect(Unit) {
+                                isAnimated = true
+                            }
+
+                            // Анимация масштаба (эффект пружинки)
+                            val scale by animateFloatAsState(
+                                targetValue = if (isAnimated) 1f else 0f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessLow
+                                ),
+                                label = "wolfScale"
+                            )
+
+                            // Анимация прозрачности (плавное появление)
+                            val alpha by animateFloatAsState(
+                                targetValue = if (isAnimated) 1f else 0f,
+                                animationSpec = tween(durationMillis = 600),
+                                label = "wolfAlpha"
+                            )
+
+                            Image(
+                                painter = painterResource(id = getGreetingIconResId()),
+                                contentDescription = "Маскот",
+                                modifier = Modifier
+                                    .size(35.dp)
+                                    .graphicsLayer(
+                                        scaleX = scale,
+                                        scaleY = scale,
+                                        alpha = alpha,
+                                        transformOrigin = TransformOrigin.Center // Анимация идет ровно из центра картинки
+                                    )
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(32.dp))
@@ -383,7 +451,6 @@ fun MainScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxSize(),
-                        // ПЕРЕНЕСЛИ ОТСТУП СЮДА: Теперь сетка скроллится под прозрачным меню!
                         contentPadding = PaddingValues(bottom = innerPadding.calculateBottomPadding() + 16.dp)
                     ) {
                         gridItems(docs) { doc ->
@@ -398,25 +465,38 @@ fun MainScreen(
 
 @Composable
 fun DocumentCard(title: String, onClick: () -> Unit) {
-    Surface(
+    ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .height(140.dp)
+            .height(140.dp) // Сделал карточки чуть выше
+            .clip(RoundedCornerShape(24.dp))
             .bounceClick { onClick() },
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp,   // Добавляет легкий оттенок
-        shadowElevation = 1.dp   // Добавляет мягкую тень
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant // Более глубокий цвет подложки
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+
+            Image(
+                painter = painterResource(id = R.drawable.pattern_guilloche),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .alpha(0.2f), // Текстура почти прозрачная
+                contentScale = ContentScale.Crop
+            )
+
+            // --- СЛОЙ ТЕКСТА ---
             Text(
+                // Оставляет фикс висячих предлогов
                 text = title.replace(" о ", " о\u00A0"),
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(16.dp),
+                fontWeight = FontWeight.SemiBold, // Сделал чуть жирнее
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(16.dp),
                 textAlign = TextAlign.Center
             )
         }

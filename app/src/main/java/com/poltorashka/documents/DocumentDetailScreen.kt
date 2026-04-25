@@ -166,23 +166,31 @@ fun DocumentDetailScreen(
         floatingActionButton = {
             if (!isEditing && document != null) {
                 Surface(
-                    shape = RoundedCornerShape(16.dp), // Скругленный квадрат как на скриншоте
+                    shape = RoundedCornerShape(16.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
                     shadowElevation = 4.dp,
                     modifier = Modifier
                         .size(64.dp)
                         .bounceClick {
-                            // Собираем все данные в один красивый текст
+                            val doc = document!!
+
+                            // 1. Берет эталонный порядок полей (как при отрисовке)
+                            val orderedLabels = com.poltorashka.documents.data.DocumentTemplates.getFieldsForType(doc.documentType)
+                            val extraLabels = doc.fieldsData.keys.filter { !orderedLabels.contains(it) }
+                            val finalLabels = orderedLabels + extraLabels
+
+                            // 2. Собирает текст строго по отсортированному списку
                             val shareText = StringBuilder().apply {
-                                append("${document!!.documentType}\n\n")
-                                document!!.fieldsData.forEach { (key, value) ->
-                                    if (value.isNotBlank()) {
+                                append("${doc.documentType}\n\n")
+                                finalLabels.forEach { key ->
+                                    val value = doc.fieldsData[key]
+                                    if (!value.isNullOrBlank()) {
                                         append("$key: $value\n")
                                     }
                                 }
                             }.toString()
 
-                            // Вызываем системное меню "Поделиться"
+                            // Вызывает системное меню "Поделиться"
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, shareText)
@@ -324,15 +332,15 @@ fun DocumentDetailScreen(
                         shape = RoundedCornerShape(28.dp)
                     ) {
                         Column(modifier = Modifier.padding(20.dp)) {
-                            // 1. Берем эталонный порядок полей из нашего шаблона
+                            // 1. Берёт эталонный порядок полей из шаблона
                             val orderedLabels = com.poltorashka.documents.data.DocumentTemplates.getFieldsForType(doc.documentType)
 
-                            // 2. Добавляем поля, которые есть в документе, но вдруг не попали в шаблон (защита от багов)
+                            // 2. Добавляет поля, которые есть в документе, но вдруг не попали в шаблон (защита от багов)
                             val extraLabels = doc.fieldsData.keys.filter { !orderedLabels.contains(it) }
                             val finalLabels = orderedLabels + extraLabels
 
                             if (isEditing) {
-                                // Отрисовываем поля для редактирования в правильном порядке
+                                // Отрисовывает поля для редактирования в правильном порядке
                                 finalLabels.forEach { label ->
                                     OutlinedTextField(
                                         value = editedFields[label] ?: "",
@@ -342,9 +350,9 @@ fun DocumentDetailScreen(
                                     )
                                 }
                             } else {
-                                // Отрисовываем поля для просмотра в правильном порядке
+                                // Отрисовывает поля для просмотра в правильном порядке
                                 finalLabels.forEach { label ->
-                                    // Показываем поле только если в нем реально есть текст (или если оно есть в ключах)
+                                    // Показывает поле только если в нем реально есть текст (или если оно есть в ключах)
                                     if (doc.fieldsData.containsKey(label)) {
                                         val value = doc.fieldsData[label] ?: ""
                                         DetailField(
