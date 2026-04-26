@@ -4,15 +4,15 @@
     "type": "APK",
     "kind": "Directory"
   },
-  "applicationId": "com.poltorashka.documents",
+  "applicationId": "com.whitewolf.documents",
   "variantName": "release",
   "elements": [
     {
       "type": "SINGLE",
       "filters": [],
       "attributes": [],
-      "versionCode": 1,
-      "versionName": "1.0",
+      "versionCode": 5,
+      "versionName": "0.5.1",
       "outputFile": "app-release.apk"
     }
   ],

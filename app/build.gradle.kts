@@ -1,8 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
-    // Добавляем плагин компилятора Compose (обязательно для Kotlin 2.0+)
     alias(libs.plugins.kotlin.compose)
-    // Оставляем рабочий KSP под твою версию Kotlin
     id("com.google.devtools.ksp") version "2.2.10-2.0.2"
 }
 
@@ -15,11 +13,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.poltorashka.documents"
+        applicationId = "com.whitewolf.documents"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 6
+        versionName = "0.5.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

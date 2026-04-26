@@ -11,7 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -32,8 +32,7 @@ import kotlinx.coroutines.launch
 fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
 
-    // --- ВОТ ГЛАВНОЕ ИЗМЕНЕНИЕ ---
-    // Берем список всех доступных документов напрямую из нашего нового шаблона
+    // берёт список всех доступных документов напрямую из нашего нового шаблона
     val documentTypes = DocumentTemplates.supportedDocumentTypes
 
     var selectedType by remember { mutableStateOf(documentTypes[0]) }
@@ -60,7 +59,7 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
             TopAppBar(
                 title = { Text("Новый документ") },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) { Icon(Icons.Filled.ArrowBack, contentDescription = "Назад") }
+                    IconButton(onClick = onBackClick) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") }
                 }
             )
         },
@@ -68,7 +67,7 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
             Button(
                 onClick = {
                     coroutineScope.launch {
-                        // Сохраняет все выбранные фото и собираем их пути
+                        // Сохраняет все выбранные фото и собирает их пути
                         val savedPaths = selectedImages.mapNotNull { uri ->
                             saveImageToInternalStorage(context, uri)
                         }
@@ -83,7 +82,12 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                         onSaved()
                     }
                 },
-                modifier = Modifier.fillMaxWidth().padding(16.dp).height(50.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding() // <-- ИСПРАВЛЕНИЕ: Кнопка больше не залезет под системную панель
+                    .imePadding()            // <-- ИСПРАВЛЕНИЕ: Кнопка будет подниматься ВМЕСТЕ с клавиатурой
+                    .padding(16.dp)
+                    .height(50.dp)
             ) { Text("Сохранить") }
         }
     ) { paddingValues ->
@@ -104,7 +108,7 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                     readOnly = true,
                     label = { Text("Тип документа") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor()
+                    modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                 )
                 ExposedDropdownMenu(
                     expanded = expanded,
@@ -162,7 +166,8 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(24.dp))
+            // Дополнительный отступ снизу, чтобы контент не прилипал к кнопке "Сохранить"
+            Spacer(modifier = Modifier.height(40.dp))
         }
     }
 }
