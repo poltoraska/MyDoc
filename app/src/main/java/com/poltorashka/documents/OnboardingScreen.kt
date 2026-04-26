@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -78,6 +79,8 @@ fun OnboardingScreen(onFinish: () -> Unit) {
 // --- ШАГ 1: ЭКРАН ПРИВЕТСТВИЯ ---
 @Composable
 fun WelcomeStep(onNext: () -> Unit) {
+    val uriHandler = LocalUriHandler.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -101,7 +104,10 @@ fun WelcomeStep(onNext: () -> Unit) {
             Image(
                 painter = painterResource(id = R.drawable.img_wolf),
                 contentDescription = "Иллюстрация волка",
-                modifier = Modifier.fillMaxWidth().height(200.dp).padding(horizontal = 32.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .padding(horizontal = 32.dp),
                 contentScale = ContentScale.Fit
             )
         }
@@ -131,12 +137,16 @@ fun WelcomeStep(onNext: () -> Unit) {
                 FeatureItem(iconRes = R.drawable.ic_family_docs, text = "Управляйте своими документами и\u00A0файлами близких.")
                 Spacer(modifier = Modifier.height(24.dp))
                 FeatureItem(iconRes = R.drawable.ic_cloud_off, text = "Загружайте файлы и\u00A0получайте к\u00A0ним доступ без\u00A0интернета.")
-                Spacer(modifier = Modifier.height(48.dp))
 
+                Spacer(modifier = Modifier.height(40.dp)) // Чуть уменьшили отступ, чтобы влез текст снизу
+
+                // Кнопка Начать
                 Surface(
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.height(48.dp).bounceClick { onNext() }
+                    modifier = Modifier
+                        .height(48.dp)
+                        .bounceClick { onNext() }
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 24.dp),
@@ -152,6 +162,28 @@ fun WelcomeStep(onNext: () -> Unit) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(text = "Начать", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onPrimary)
                     }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // НОВЫЙ БЛОК: Ссылка на политику
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Продолжая, вы принимаете условия",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Политики конфиденциальности",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .bounceClick {
+                                uriHandler.openUri("https://gist.github.com/poltoraska/ce7d88dd68e768e4addda4766e416f97")
+                            }
+                            .padding(vertical = 4.dp, horizontal = 8.dp)
+                    )
                 }
             }
         }
