@@ -82,6 +82,8 @@ import com.poltorashka.documents.data.AppDatabase
 import com.poltorashka.documents.ui.theme.DocumentsTheme
 import java.util.Calendar
 import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.graphics.StrokeCap
 
 fun getDynamicGreeting(): String {
     val hour = java.time.LocalTime.now().hour
@@ -244,6 +246,10 @@ fun MainScreen(
     val folders by viewModel.folders.collectAsState()
     val manualSelectedId by viewModel.selectedFolderId.collectAsState()
     val docs by viewModel.documents.collectAsState()
+
+    // ФЛАГ ЗАГРУЗКИ
+    val isLoading by viewModel.isLoading.collectAsState()
+
     val activeFolderId = manualSelectedId ?: folders.firstOrNull()?.id
     val context = LocalContext.current
     val prefs = remember { UserPreferences(context) }
@@ -293,15 +299,12 @@ fun MainScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
 
-                            // --- МАГИЯ АНИМАЦИИ ВОЛКА ---
                             var isAnimated by remember { mutableStateOf(false) }
 
-                            // Запускает анимацию сразу при появлении экрана
                             LaunchedEffect(Unit) {
                                 isAnimated = true
                             }
 
-                            // Анимация масштаба (эффект пружинки)
                             val scale by animateFloatAsState(
                                 targetValue = if (isAnimated) 1f else 0f,
                                 animationSpec = spring(
@@ -311,7 +314,6 @@ fun MainScreen(
                                 label = "wolfScale"
                             )
 
-                            // Анимация прозрачности (плавное появление)
                             val alpha by animateFloatAsState(
                                 targetValue = if (isAnimated) 1f else 0f,
                                 animationSpec = tween(durationMillis = 600),
@@ -327,7 +329,7 @@ fun MainScreen(
                                         scaleX = scale,
                                         scaleY = scale,
                                         alpha = alpha,
-                                        transformOrigin = TransformOrigin.Center // Анимация идет ровно из центра картинки
+                                        transformOrigin = TransformOrigin.Center
                                     )
                             )
                         }
@@ -335,7 +337,8 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(32.dp))
 
-                    if (folders.isNotEmpty()) {
+                    // Прячет меню папок, пока идет расшифровка
+                    if (!isLoading && folders.isNotEmpty()) {
                         LazyRow(
                             modifier = Modifier.fillMaxWidth(),
                             contentPadding = PaddingValues(horizontal = 24.dp),
@@ -345,11 +348,11 @@ fun MainScreen(
                                 val isSelected = activeFolderId == folder.id
 
                                 val containerColor by animateColorAsState(
-                                    targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                                     label = "color"
                                 )
                                 val contentColor by animateColorAsState(
-                                    targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                    targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                     label = "color"
                                 )
 
@@ -384,8 +387,39 @@ fun MainScreen(
                     .padding(horizontal = 16.dp)
                     .padding(top = 16.dp)
             ) {
-                if (folders.isEmpty()) {
-                    // Улучшенное пустое состояние для новых пользователей
+                if (isLoading) {
+                    // НОВЫЙ ИНДИКАТОР ЗАГРУЗКИ ВМЕСТО МОРГАНИЯ
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(bottom = innerPadding.calculateBottomPadding()),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(28.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(32.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                CircularProgressIndicator(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(48.dp),
+                                    strokeWidth = 4.dp,
+                                    strokeCap = StrokeCap.Round
+                                )
+                                Spacer(modifier = Modifier.height(24.dp))
+                                Text(
+                                    text = "Открываем сейф...",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                } else if (folders.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -412,7 +446,6 @@ fun MainScreen(
                                     fontWeight = FontWeight.Medium
                                 )
                                 Spacer(modifier = Modifier.height(24.dp))
-                                // Кнопка, которая сразу ведет пользователя куда нужно
                                 Surface(
                                     shape = CircleShape,
                                     color = MaterialTheme.colorScheme.primary,
@@ -515,8 +548,8 @@ fun CustomFloatingToolbar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding() // ДОБАВИЛИ ЗАЩИТУ: меню всегда будет выше системной полоски
-            .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 24.dp), // Слегка уменьшили bottom, так как navigationBarsPadding добавит своего места
+            .navigationBarsPadding() // меню всегда будет выше системной полоски
+            .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 24.dp), // Слегка уменьшен bottom, так как navigationBarsPadding добавит своего места
         horizontalArrangement = Arrangement.spacedBy(gapBetweenIslands, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically
     ) {

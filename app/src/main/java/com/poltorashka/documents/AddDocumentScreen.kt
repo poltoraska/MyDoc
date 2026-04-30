@@ -1,5 +1,6 @@
 package com.poltorashka.documents
 
+import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -26,27 +27,50 @@ import com.poltorashka.documents.data.AppDatabase
 import com.poltorashka.documents.data.DocumentEntity
 import com.poltorashka.documents.data.DocumentTemplates
 import kotlinx.coroutines.launch
+import java.io.File
+import java.util.UUID
+
+private fun saveEncryptedFile(context: Context, uri: Uri): String? {
+    // Умное определение расширения: если PDF - пишет .pdf, иначе .jpg
+    val mimeType = context.contentResolver.getType(uri)
+    val extension = if (mimeType == "application/pdf") "pdf" else "jpg"
+
+    val fileName = "doc_${UUID.randomUUID()}.$extension"
+    val file = File(context.filesDir, fileName)
+
+    return try {
+        val inputStream = context.contentResolver.openInputStream(uri)
+        val encryptedFile = FileSecurity.getEncryptedFile(context, file)
+        val outputStream = encryptedFile.openFileOutput()
+
+        inputStream?.use { input ->
+            outputStream.use { output ->
+                input.copyTo(output)
+            }
+        }
+        file.absolutePath
+    } catch (e: Exception) {
+        null
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
 
-    // берёт список всех доступных документов напрямую из нашего нового шаблона
     val documentTypes = DocumentTemplates.supportedDocumentTypes
-
     var selectedType by remember { mutableStateOf(documentTypes[0]) }
 
     val inputValues = remember { mutableStateMapOf<String, String>() }
     val currentFields = DocumentTemplates.getFieldsForType(selectedType)
 
-    // Теперь это список URI
     var selectedImages by remember { mutableStateOf<List<Uri>>(emptyList()) }
 
-    // Мультивыбор фото
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia()
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
+        // Теперь здесь могут быть и фото, и PDF
         selectedImages = selectedImages + uris
     }
 
@@ -67,25 +91,26 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
             Button(
                 onClick = {
                     coroutineScope.launch {
-                        // Сохраняет все выбранные фото и собирает их пути
+                        // Использует новую функцию с новым названием
                         val savedPaths = selectedImages.mapNotNull { uri ->
-                            saveImageToInternalStorage(context, uri)
+                            saveEncryptedFile(context, uri)
                         }
 
                         val newDocument = DocumentEntity(
                             profileId = profileId,
                             documentType = selectedType,
-                            photoUris = savedPaths, // Передает список путей!
+                            photoUris = savedPaths,
                             fieldsData = inputValues.toMap()
                         )
+
                         dao.insertDocument(newDocument)
                         onSaved()
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding() // <-- ИСПРАВЛЕНИЕ: Кнопка больше не залезет под системную панель
-                    .imePadding()            // <-- ИСПРАВЛЕНИЕ: Кнопка будет подниматься ВМЕСТЕ с клавиатурой
+                    .navigationBarsPadding()
+                    .imePadding()
                     .padding(16.dp)
                     .height(50.dp)
             ) { Text("Сохранить") }
@@ -136,15 +161,15 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Кнопка добавления фото
             OutlinedButton(
-                onClick = { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
+                onClick = { filePickerLauncher.launch(arrayOf("image/*", "application/pdf")) },
                 modifier = Modifier.fillMaxWidth().height(50.dp)
-            ) { Text("Добавить файлы (${selectedImages.size})") }
+            ) {
+                Text("Добавить файлы (${selectedImages.size})")
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Горизонтальный список выбранных фото с кнопкой удаления
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(selectedImages) { uri ->
                     Box {
@@ -154,7 +179,6 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                             modifier = Modifier.size(120.dp).clip(RoundedCornerShape(12.dp)),
                             contentScale = ContentScale.Crop
                         )
-                        // Крестик удаления
                         IconButton(
                             onClick = { selectedImages = selectedImages - uri },
                             modifier = Modifier.align(Alignment.TopEnd)
@@ -166,7 +190,6 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                     }
                 }
             }
-            // Дополнительный отступ снизу, чтобы контент не прилипал к кнопке "Сохранить"
             Spacer(modifier = Modifier.height(40.dp))
         }
     }

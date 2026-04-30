@@ -1,9 +1,10 @@
 package com.poltorashka.documents
 
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -51,18 +53,123 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import bounceClick
 import coil.compose.AsyncImage
 import com.poltorashka.documents.data.AppDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.UUID
+
+private fun saveEncryptedFile(context: Context, uri: Uri): String? {
+    val mimeType = context.contentResolver.getType(uri)
+    val extension = if (mimeType == "application/pdf") "pdf" else "jpg"
+
+    val fileName = "doc_${UUID.randomUUID()}.$extension"
+    val file = File(context.filesDir, fileName)
+
+    return try {
+        val inputStream = context.contentResolver.openInputStream(uri)
+        val encryptedFile = FileSecurity.getEncryptedFile(context, file)
+        val outputStream = encryptedFile.openFileOutput()
+
+        inputStream?.use { input ->
+            outputStream.use { output ->
+                input.copyTo(output)
+            }
+        }
+        file.absolutePath
+    } catch (e: Exception) {
+        null
+    }
+}
+
+private fun openPdfFile(context: Context, path: String) {
+    try {
+        val encryptedFile = File(path)
+        val decryptedBytes = FileSecurity.decryptFile(context, encryptedFile)
+
+        // Создаёт временный незашифрованный файл в кэше
+        val tempFile = File(context.cacheDir, "temp_preview.pdf")
+        tempFile.writeBytes(decryptedBytes)
+
+        // Получает безопасную ссылку через FileProvider
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            tempFile
+        )
+
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/pdf")
+            // Флаг дает временное право читалке открыть этот конкретный файл
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        // ИСПРАВЛЕНИЕ: Запускаем напрямую, без createChooser, чтобы права точно передались
+        context.startActivity(intent)
+
+    } catch (e: Exception) {
+        Toast.makeText(context, "Ошибка при открытии PDF: ${e.message}", Toast.LENGTH_LONG).show()
+    }
+}
+
+@Composable
+fun DecryptedAsyncImage(
+    path: String,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+    onClick: (() -> Unit)? = null
+) {
+    val context = LocalContext.current
+    var imageBytes by remember(path) { mutableStateOf<ByteArray?>(null) }
+    var hasError by remember(path) { mutableStateOf(false) }
+
+    LaunchedEffect(path) {
+        withContext(Dispatchers.IO) {
+            try {
+                imageBytes = FileSecurity.decryptFile(context, File(path))
+            } catch (e: Exception) {
+                hasError = true
+            }
+        }
+    }
+
+    val finalModifier = if (onClick != null) modifier.clickable { onClick() } else modifier
+
+    if (imageBytes != null) {
+        AsyncImage(
+            model = imageBytes,
+            contentDescription = "Расшифрованный скан",
+            modifier = finalModifier,
+            contentScale = contentScale
+        )
+    } else if (hasError) {
+        Box(modifier = finalModifier.background(MaterialTheme.colorScheme.errorContainer), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Close, contentDescription = "Ошибка", tint = MaterialTheme.colorScheme.onErrorContainer)
+        }
+    } else {
+        Box(modifier = finalModifier.background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp),
+                strokeWidth = 3.dp,
+                strokeCap = StrokeCap.Round
+            )
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,16 +187,13 @@ fun DocumentDetailScreen(
     val document by viewModel.document.collectAsState()
     val context = LocalContext.current
 
-    // Состояния интерфейса
     var imageToShow by remember { mutableStateOf<String?>(null) }
     var imageToDelete by remember { mutableStateOf<String?>(null) }
 
-    // Состояния для редактирования и удаления документа
     var isEditing by remember { mutableStateOf(false) }
     var showDeleteDocDialog by remember { mutableStateOf(false) }
     val editedFields = remember { mutableStateMapOf<String, String>() }
 
-    // Когда включается режим редактирования, копирует текущие данные в редактируемый Map
     LaunchedEffect(isEditing) {
         if (isEditing) {
             document?.fieldsData?.let { data ->
@@ -99,12 +203,12 @@ fun DocumentDetailScreen(
         }
     }
 
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia()
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
         document?.let { doc ->
             uris.forEach { uri ->
-                val savedPath = saveImageToInternalStorage(context, uri)
+                val savedPath = saveEncryptedFile(context, uri)
                 if (savedPath != null) {
                     viewModel.addPhoto(doc, savedPath)
                 }
@@ -112,7 +216,6 @@ fun DocumentDetailScreen(
         }
     }
 
-    // Диалог удаления отдельного файла
     if (imageToDelete != null) {
         AlertDialog(
             onDismissRequest = { imageToDelete = null },
@@ -130,7 +233,6 @@ fun DocumentDetailScreen(
         )
     }
 
-    // Диалог удаления всего документа
     if (showDeleteDocDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDocDialog = false },
@@ -150,30 +252,22 @@ fun DocumentDetailScreen(
         )
     }
 
-    // Полноэкранный просмотр
+    // Полноэкранный просмотр картинок
     if (imageToShow != null) {
         Dialog(
             onDismissRequest = { imageToShow = null },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            Box(
-                modifier = Modifier.fillMaxSize().background(Color.Black).clickable { imageToShow = null }
-            ) {
-                AsyncImage(
-                    model = File(imageToShow!!),
-                    contentDescription = null,
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black).clickable { imageToShow = null }) {
+                DecryptedAsyncImage(
+                    path = imageToShow!!,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit
                 )
-                // Кнопка закрытия с пружинкой и фоном
                 Surface(
                     shape = CircleShape,
                     color = Color.Black.copy(alpha = 0.5f),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp)
-                        .size(48.dp)
-                        .bounceClick { imageToShow = null }
+                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).size(48.dp).bounceClick { imageToShow = null }
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White)
@@ -184,7 +278,6 @@ fun DocumentDetailScreen(
     }
 
     Scaffold(
-        // НОВАЯ КНОПКА ПОДЕЛИТЬСЯ (FAB)
         floatingActionButton = {
             if (!isEditing && document != null) {
                 Surface(
@@ -195,13 +288,10 @@ fun DocumentDetailScreen(
                         .size(64.dp)
                         .bounceClick {
                             val doc = document!!
-
-                            // 1. Берет эталонный порядок полей (как при отрисовке)
                             val orderedLabels = com.poltorashka.documents.data.DocumentTemplates.getFieldsForType(doc.documentType)
                             val extraLabels = doc.fieldsData.keys.filter { !orderedLabels.contains(it) }
                             val finalLabels = orderedLabels + extraLabels
 
-                            // 2. Собирает текст строго по отсортированному списку
                             val shareText = StringBuilder().apply {
                                 append("${doc.documentType}\n\n")
                                 finalLabels.forEach { key ->
@@ -212,7 +302,6 @@ fun DocumentDetailScreen(
                                 }
                             }.toString()
 
-                            // Вызывает системное меню "Поделиться"
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, shareText)
@@ -238,7 +327,6 @@ fun DocumentDetailScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .padding(bottom = innerPadding.calculateBottomPadding())
         ) {
-            // --- ШАПКА В СТИЛЕ MATERIAL EXPRESSIVE ---
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.secondaryContainer,
@@ -250,9 +338,7 @@ fun DocumentDetailScreen(
                         .fillMaxWidth()
                         .padding(top = 80.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
                 ) {
-                    // Панель с кнопками навигации и действий
                     Box(modifier = Modifier.fillMaxWidth()) {
-
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.surface,
@@ -294,33 +380,19 @@ fun DocumentDetailScreen(
                                 Surface(
                                     shape = CircleShape,
                                     color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .bounceClick { showDeleteDocDialog = true }
+                                    modifier = Modifier.size(44.dp).bounceClick { showDeleteDocDialog = true }
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Delete,
-                                            contentDescription = "Удалить",
-                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
+                                        Icon(Icons.Filled.Delete, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
                                     }
                                 }
                                 Surface(
                                     shape = CircleShape,
                                     color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .bounceClick { isEditing = true }
+                                    modifier = Modifier.size(44.dp).bounceClick { isEditing = true }
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Edit,
-                                            contentDescription = "Редактировать",
-                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
+                                        Icon(Icons.Filled.Edit, contentDescription = "Редактировать", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
                                     }
                                 }
                             }
@@ -329,7 +401,6 @@ fun DocumentDetailScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Заголовок (Тип документа) с приклеенным "о"
                     Text(
                         text = if (isEditing) "Редактирование" else (document?.documentType?.replace(" о ", " о\u00A0") ?: "Загрузка..."),
                         fontSize = 32.sp,
@@ -340,7 +411,6 @@ fun DocumentDetailScreen(
                 }
             }
 
-            // --- ОСНОВНОЙ КОНТЕНТ ---
             document?.let { doc ->
                 Column(
                     modifier = Modifier
@@ -354,15 +424,11 @@ fun DocumentDetailScreen(
                         shape = RoundedCornerShape(28.dp)
                     ) {
                         Column(modifier = Modifier.padding(20.dp)) {
-                            // 1. Берёт эталонный порядок полей из шаблона
                             val orderedLabels = com.poltorashka.documents.data.DocumentTemplates.getFieldsForType(doc.documentType)
-
-                            // 2. Добавляет поля, которые есть в документе, но вдруг не попали в шаблон (защита от багов)
                             val extraLabels = doc.fieldsData.keys.filter { !orderedLabels.contains(it) }
                             val finalLabels = orderedLabels + extraLabels
 
                             if (isEditing) {
-                                // Отрисовывает поля для редактирования в правильном порядке
                                 finalLabels.forEach { label ->
                                     OutlinedTextField(
                                         value = editedFields[label] ?: "",
@@ -372,9 +438,7 @@ fun DocumentDetailScreen(
                                     )
                                 }
                             } else {
-                                // Отрисовывает поля для просмотра в правильном порядке
                                 finalLabels.forEach { label ->
-                                    // Показывает поле только если в нем реально есть текст (или если оно есть в ключах)
                                     if (doc.fieldsData.containsKey(label)) {
                                         val value = doc.fieldsData[label] ?: ""
                                         DetailField(
@@ -382,7 +446,6 @@ fun DocumentDetailScreen(
                                             value = value,
                                             onCopy = { textToCopy ->
                                                 if (textToCopy.isNotBlank()) {
-                                                    // Используется стандартный надежный буфер обмена Android
                                                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                                     val clip = android.content.ClipData.newPlainText("Скопировано", textToCopy)
                                                     clipboard.setPrimaryClip(clip)
@@ -408,7 +471,7 @@ fun DocumentDetailScreen(
                             color = MaterialTheme.colorScheme.secondaryContainer,
                             modifier = Modifier
                                 .height(36.dp)
-                                .bounceClick { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) }
+                                .bounceClick { filePickerLauncher.launch(arrayOf("image/*", "application/pdf")) }
                         ) {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 16.dp)) {
                                 Text("+ Добавить", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSecondaryContainer)
@@ -417,47 +480,28 @@ fun DocumentDetailScreen(
                     }
 
                     if (doc.photoUris.isEmpty()) {
-                        Text("Фотографии еще не добавлены", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                        Text("Файлы еще не добавлены", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
                     } else {
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.padding(vertical = 8.dp)
                         ) {
                             items(doc.photoUris) { path ->
-                                Box {
-                                    AsyncImage(
-                                        model = File(path),
-                                        contentDescription = "Скан",
-                                        modifier = Modifier
-                                            .size(160.dp)
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .clickable { imageToShow = path },
-                                        contentScale = ContentScale.Crop
-                                    )
-                                    Surface(
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = MaterialTheme.colorScheme.errorContainer,
-                                        modifier = Modifier
-                                            .align(Alignment.TopEnd)
-                                            .padding(6.dp)
-                                            .size(32.dp)
-                                            .bounceClick { imageToDelete = path }
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                Icons.Filled.Close,
-                                                contentDescription = "Удалить",
-                                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                                                modifier = Modifier.size(20.dp)
-                                            )
+                                FileItem(
+                                    path = path,
+                                    onDelete = { imageToDelete = path },
+                                    onOpen = {
+                                        if (path.endsWith(".pdf", ignoreCase = true)) {
+                                            openPdfFile(context, path)
+                                        } else {
+                                            imageToShow = path
                                         }
                                     }
-                                }
+                                )
                             }
                         }
                     }
 
-                    // Дополнительный отступ снизу, чтобы текст не прятался за кнопкой "Поделиться"
                     Spacer(modifier = Modifier.height(80.dp))
                 }
             }
@@ -465,14 +509,49 @@ fun DocumentDetailScreen(
     }
 }
 
-// ОБНОВЛЕННЫЙ DETAIL FIELD С ФУНКЦИЕЙ КОПИРОВАНИЯ
+// КОМПОНЕНТ ДЛЯ КАРТОЧКИ ФАЙЛА С КРЕСТИКОМ ПОВЕРХ ВСЕГО
+@Composable
+fun FileItem(path: String, onDelete: () -> Unit, onOpen: () -> Unit) {
+    val isPdf = path.endsWith(".pdf", ignoreCase = true)
+
+    Box(modifier = Modifier.size(160.dp)) {
+        // Основное содержимое файла (картинка или PDF иконка)
+        Surface(
+            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)).bounceClick { onOpen() },
+            color = MaterialTheme.colorScheme.surfaceVariant
+        ) {
+            if (isPdf) {
+                Column(verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(painterResource(id = R.drawable.ic_pdf_file), null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("PDF Документ", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            } else {
+                DecryptedAsyncImage(path = path, modifier = Modifier.fillMaxSize())
+            }
+        }
+
+        // КНОПКА УДАЛЕНИЯ (Всегда будет рисоваться поверх Surface)
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.errorContainer,
+            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).size(32.dp).bounceClick { onDelete() },
+            shadowElevation = 2.dp
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.Close, null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
 @Composable
 fun DetailField(label: String, value: String, onCopy: (String) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .bounceClick { onCopy(value) } // Наша пружинка при клике на строчку!
+            .bounceClick { onCopy(value) }
             .padding(vertical = 8.dp, horizontal = 4.dp)
     ) {
         Text(text = label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)

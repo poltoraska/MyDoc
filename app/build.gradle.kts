@@ -16,8 +16,8 @@ android {
         applicationId = "com.whitewolf.documents"
         minSdk = 28
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.5.2"
+        versionCode = 7
+        versionName = "0.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -68,5 +68,10 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.navigation:navigation-compose:2.8.3")
     implementation("androidx.fragment:fragment-ktx:1.8.4")
+    // SQLCipher для шифрования Room
+    implementation("net.zetetic:sqlcipher-android:4.14.1")
+    implementation("androidx.sqlite:sqlite:2.4.0")
+    // Jetpack Security для безопасного хранения ключей
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.core:core-ktx:1.12.0")
 }
-

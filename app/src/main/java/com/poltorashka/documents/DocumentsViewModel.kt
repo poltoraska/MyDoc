@@ -10,13 +10,31 @@ import com.poltorashka.documents.data.FolderEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 class DocumentsViewModel(
     private val documentDao: DocumentDao,
     private val folderDao: FolderDao
 ) : ViewModel() {
+
+    // --- НОВЫЙ БЛОК: СОСТОЯНИЕ ЗАГРУЗКИ ---
+    // Изначально true, чтобы сразу показать красивый лоадер при запуске
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            // Ждет, пока SQLCipher инициализируется и база вернет первый ответ.
+            // Как только это произойдет (даже если список пуст) — выключает загрузку.
+            folderDao.getAllFolders().collect {
+                _isLoading.value = false
+            }
+        }
+    }
+    // --------------------------------------
 
     // Получает все папки из БД
     val folders: StateFlow<List<FolderEntity>> = folderDao.getAllFolders()
