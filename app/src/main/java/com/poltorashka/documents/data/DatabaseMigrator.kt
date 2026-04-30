@@ -1,7 +1,9 @@
-package com.poltorashka.documents
+package com.poltorashka.documents.data
 
 import android.content.Context
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
+import com.poltorashka.documents.FileSecurity
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
 
@@ -11,7 +13,6 @@ object DatabaseMigrator {
     fun encryptIfNeeded(context: Context, dbName: String, password: ByteArray) {
         val dbFile = context.getDatabasePath(dbName)
 
-        // Проверяет если файла нет или он уже зашифрован — выходит
         if (!dbFile.exists() || isDatabaseEncrypted(context, dbName)) return
 
         val tempDbFile = File(context.cacheDir, "temp_encrypted.db")
@@ -22,8 +23,8 @@ object DatabaseMigrator {
             val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
                 .name(dbName)
                 .callback(object : SupportSQLiteOpenHelper.Callback(1) {
-                    override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {}
-                    override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+                    override fun onCreate(db: SupportSQLiteDatabase) {}
+                    override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
                 })
                 .build()
 
@@ -41,8 +42,15 @@ object DatabaseMigrator {
             db.close()
 
             dbFile.delete()
+
             tempDbFile.renameTo(dbFile)
+
+            File(dbFile.path + "-wal").delete()
+            File(dbFile.path + "-shm").delete()
+            File(dbFile.path + "-journal").delete() // На всякий случай зачистим и журнал
+
         } catch (_: Exception) {
+            // В релизе тут можно добавить лог в Firebase/Sentry
         }
     }
 
