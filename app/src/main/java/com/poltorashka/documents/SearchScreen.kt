@@ -182,9 +182,7 @@ fun SearchScreen(
                         Spacer(modifier = Modifier.height(24.dp))
                         Text(
                             text = "Введите данные для поиска",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            fontSize = 15.sp,
                         )
                     }
                 } else if (filteredDocs.isEmpty()) {
