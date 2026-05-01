@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -58,6 +59,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -100,11 +103,9 @@ private fun openPdfFile(context: Context, path: String) {
         val encryptedFile = File(path)
         val decryptedBytes = FileSecurity.decryptFile(context, encryptedFile)
 
-        // Создаёт временный незашифрованный файл в кэше
         val tempFile = File(context.cacheDir, "temp_preview.pdf")
         tempFile.writeBytes(decryptedBytes)
 
-        // Получает безопасную ссылку через FileProvider
         val uri = FileProvider.getUriForFile(
             context,
             "${context.packageName}.fileprovider",
@@ -113,11 +114,9 @@ private fun openPdfFile(context: Context, path: String) {
 
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/pdf")
-            // Флаг дает временное право читалке открыть этот конкретный файл
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
-        // ИСПРАВЛЕНИЕ: Запускаем напрямую, без createChooser, чтобы права точно передались
         context.startActivity(intent)
 
     } catch (e: Exception) {
@@ -198,7 +197,13 @@ fun DocumentDetailScreen(
         if (isEditing) {
             document?.fieldsData?.let { data ->
                 editedFields.clear()
-                editedFields.putAll(data)
+                data.forEach { (key, value) ->
+                    if (key.contains("Дата", ignoreCase = true)) {
+                        editedFields[key] = value.filter { it.isDigit() }
+                    } else {
+                        editedFields[key] = value
+                    }
+                }
             }
         }
     }
@@ -252,7 +257,6 @@ fun DocumentDetailScreen(
         )
     }
 
-    // Полноэкранный просмотр картинок
     if (imageToShow != null) {
         Dialog(
             onDismissRequest = { imageToShow = null },
@@ -368,7 +372,11 @@ fun DocumentDetailScreen(
                                     modifier = Modifier
                                         .height(44.dp)
                                         .bounceClick {
-                                            document?.let { doc -> viewModel.updateFields(doc, editedFields.toMap()) }
+                                            // Перед сохранением конвертируем цифры обратно в формат DD.MM.YYYY
+                                            val formattedFields = editedFields.mapValues { (key, value) ->
+                                                if (key.contains("Дата", ignoreCase = true)) value.toDateString() else value
+                                            }
+                                            document?.let { doc -> viewModel.updateFields(doc, formattedFields) }
                                             isEditing = false
                                         }
                                 ) {
@@ -430,10 +438,22 @@ fun DocumentDetailScreen(
 
                             if (isEditing) {
                                 finalLabels.forEach { label ->
+                                    val isDateField = label.contains("Дата", ignoreCase = true)
+
                                     OutlinedTextField(
                                         value = editedFields[label] ?: "",
-                                        onValueChange = { newValue -> editedFields[label] = newValue },
+                                        onValueChange = { newValue ->
+                                            if (isDateField) {
+                                                // Для даты разрешаем только цифры и максимум 8 штук
+                                                val digits = newValue.filter { it.isDigit() }.take(8)
+                                                editedFields[label] = digits
+                                            } else {
+                                                editedFields[label] = newValue
+                                            }
+                                        },
                                         label = { Text(label) },
+                                        visualTransformation = if (isDateField) DateTransformation() else VisualTransformation.None,
+                                        keyboardOptions = if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
                                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                                     )
                                 }
@@ -515,7 +535,6 @@ fun FileItem(path: String, onDelete: () -> Unit, onOpen: () -> Unit) {
     val isPdf = path.endsWith(".pdf", ignoreCase = true)
 
     Box(modifier = Modifier.size(160.dp)) {
-        // Основное содержимое файла (картинка или PDF иконка)
         Surface(
             modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp)).bounceClick { onOpen() },
             color = MaterialTheme.colorScheme.surfaceVariant
@@ -531,7 +550,6 @@ fun FileItem(path: String, onDelete: () -> Unit, onOpen: () -> Unit) {
             }
         }
 
-        // КНОПКА УДАЛЕНИЯ (Всегда будет рисоваться поверх Surface)
         Surface(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.errorContainer,

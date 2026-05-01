@@ -1,18 +1,23 @@
 package com.poltorashka.documents
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
@@ -34,8 +39,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,9 +54,9 @@ import com.poltorashka.documents.data.AppDatabase
 @Composable
 fun SearchScreen(
     onBackClick: () -> Unit,
-    onHomeClick: () -> Unit,       // НОВОЕ: Переход на главную
-    onSettingsClick: () -> Unit,   // НОВОЕ: Переход в настройки
-    onAddClick: () -> Unit,        // НОВОЕ: Действие для кнопки "+"
+    onHomeClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onAddClick: () -> Unit,
     onDocumentClick: (Int) -> Unit,
     viewModel: DocumentsViewModel = viewModel(
         factory = DocumentsViewModelFactory(
@@ -60,7 +68,6 @@ fun SearchScreen(
     var searchQuery by remember { mutableStateOf("") }
     val allDocs by viewModel.allDocuments.collectAsState()
 
-    // Логика умного поиска
     val filteredDocs = remember(searchQuery, allDocs) {
         if (searchQuery.isBlank()) {
             emptyList()
@@ -75,9 +82,8 @@ fun SearchScreen(
 
     Scaffold(
         bottomBar = {
-            // НОВАЯ ПЛАВАЮЩАЯ ПАНЕЛЬ
             CustomFloatingToolbar(
-                activeTab = 1, // 1 - это индекс вкладки "Поиск"
+                activeTab = 1,
                 onHomeClick = onHomeClick,
                 onSearchClick = { },
                 onSettingsClick = onSettingsClick,
@@ -91,7 +97,7 @@ fun SearchScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .padding(bottom = innerPadding.calculateBottomPadding())
         ) {
-            // --- НАША НОВАЯ ШИКАРНАЯ ШАПКА ---
+            // --- ШАПКА ---
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.secondaryContainer,
@@ -103,17 +109,25 @@ fun SearchScreen(
                         .fillMaxWidth()
                         .padding(top = 80.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
                 ) {
-                    Text(
-                        text = "Поиск",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Поиск",
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Image(
+                            painter = painterResource(id = R.drawable.serch_icon),
+                            contentDescription = "Иконка приложения",
+
+                            modifier = Modifier.size(30.dp)
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // СТРОКА ПОИСКА ВСТРОЕНА ПРЯМО В ШАПКУ
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
@@ -144,11 +158,34 @@ fun SearchScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
-                    .padding(top = 24.dp) // Отступ от шапки
+                    .padding(top = 24.dp)
             ) {
                 if (searchQuery.isBlank()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Введите данные для поиска", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // ИЗМЕНЕНИЕ 2: Большая иллюстрация по центру
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+
+                        Image(
+
+                            painter = painterResource(id = R.drawable.img_wolf_keyboard),
+                            contentDescription = "Иллюстрация поиска",
+                            modifier = Modifier
+                                .size(160.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+
+
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text(
+                            text = "Введите данные для поиска",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 } else if (filteredDocs.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -160,7 +197,6 @@ fun SearchScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxSize(),
-                        // Распорка
                         contentPadding = PaddingValues(bottom = innerPadding.calculateBottomPadding() + 16.dp)
                     ) {
                         items(filteredDocs) { doc ->

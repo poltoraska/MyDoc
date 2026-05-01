@@ -99,41 +99,35 @@ fun SettingsScreen(
     var folderToDelete by remember { mutableStateOf<FolderEntity?>(null) }
     var revealedFolderId by remember { mutableStateOf<Int?>(null) }
 
-    // Состояния для Drag & Drop
     val listState = rememberLazyListState()
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
     var draggingItemOffset by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
     val itemHeightPx = with(density) { 72.dp.toPx() }
 
-    // Состояния безопасности
     var isPinEnabledState by remember { mutableStateOf(prefs.isPinEnabled) }
     var isBiometricEnabledState by remember { mutableStateOf(prefs.isBiometricEnabled) }
     var showPinSetupDialog by remember { mutableStateOf(false) }
 
-    // Глобальный скролл экрана
     val screenScrollState = rememberScrollState()
 
     Scaffold(
         bottomBar = {
             CustomFloatingToolbar(
-                activeTab = 2, // Вкладка Настройки
+                activeTab = 2,
                 onHomeClick = onHomeClick,
                 onSearchClick = onSearchClick,
                 onSettingsClick = { },
-                // По нажатию на + в настройках можно сразу вызывать окно создания папки
                 onAddClick = { showAddDialog = true }
             )
         }
     ) { innerPadding ->
-        // ГЛАВНЫЙ КОНТЕЙНЕР ЭКРАНА
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
 
-            // 1. НОВАЯ ШИКАРНАЯ ШАПКА
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.secondaryContainer,
@@ -144,8 +138,8 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 80.dp, bottom = 24.dp, start = 24.dp, end = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween, // Текст налево, кнопка направо
-                    verticalAlignment = Alignment.CenterVertically // Выравнивание по центру по вертикали
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
                         Text(
@@ -162,7 +156,6 @@ fun SettingsScreen(
                         )
                     }
 
-                    // Новая кнопка 'i'
                     Surface(
                         shape = CircleShape,
                         color = MaterialTheme.colorScheme.primary,
@@ -181,7 +174,6 @@ fun SettingsScreen(
                 }
             }
 
-            // 2. БЛОК С САМИМИ НАСТРОЙКАМИ (Он скроллится и имеет отступ снизу под панель!)
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -212,7 +204,6 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // НОВАЯ КНОПКА "СОХРАНИТЬ" (С пружинкой)
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.primaryContainer,
@@ -248,7 +239,6 @@ fun SettingsScreen(
                                 Text("Папки", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                                 Text("Удерживайте, чтобы переместить", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            // Кнопку "Добавить" можно тоже обновить по желанию, но иконка смотрится гармонично
                             IconButton(onClick = { showAddDialog = true }) {
                                 Icon(Icons.Filled.Add, contentDescription = "Добавить")
                             }
@@ -359,9 +349,14 @@ fun SettingsScreen(
                                     if (isChecked) {
                                         showPinSetupDialog = true
                                     } else {
+                                        // Пользователь отключает PIN
                                         prefs.isPinEnabled = false
                                         prefs.appPin = ""
                                         isPinEnabledState = false
+
+                                        // АВТОМАТИЧЕСКИ ОТКЛЮЧАЕМ БИОМЕТРИЮ
+                                        prefs.isBiometricEnabled = false
+                                        isBiometricEnabledState = false
                                     }
                                 }
                             )
@@ -372,13 +367,20 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Вход по биометрии", fontSize = 16.sp)
+                            // Цвет текста тоже станет серым, если тумблер заблокирован
+                            Text(
+                                text = "Вход по биометрии",
+                                fontSize = 16.sp,
+                                color = if (isPinEnabledState) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                            )
                             Switch(
                                 checked = isBiometricEnabledState,
                                 onCheckedChange = { isChecked ->
                                     prefs.isBiometricEnabled = isChecked
                                     isBiometricEnabledState = isChecked
-                                }
+                                },
+                                // МАГИЯ: Тумблер активен, только если включен ПИН-код
+                                enabled = isPinEnabledState
                             )
                         }
                     }
@@ -387,14 +389,13 @@ fun SettingsScreen(
         }
     }
 
-    // ПОЛНОЭКРАННОЕ СОЗДАНИЕ PIN-КОДА (Без черных полос)
+    // ПОЛНОЭКРАННОЕ СОЗДАНИЕ PIN-КОДА
     if (showPinSetupDialog) {
         var pinInput by remember { mutableStateOf("") }
-        var isConfirmMode by remember { mutableStateOf(false) } // Режим подтверждения
-        var firstPin by remember { mutableStateOf("") } // Храним первый введенный пароль
+        var isConfirmMode by remember { mutableStateOf(false) }
+        var firstPin by remember { mutableStateOf("") }
         var isError by remember { mutableStateOf(false) }
 
-        // Сброс ошибки через полсекунды
         LaunchedEffect(isError) {
             if (isError) {
                 delay(500)
@@ -403,13 +404,11 @@ fun SettingsScreen(
             }
         }
 
-        // Перехватываем системную кнопку "Назад", чтобы просто закрыть создание PIN-кода
         androidx.activity.compose.BackHandler {
             showPinSetupDialog = false
             isPinEnabledState = false
         }
 
-        // Вместо Dialog используем обычный Surface поверх всего экрана!
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
@@ -417,11 +416,10 @@ fun SettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .systemBarsPadding() // Убираем черные полосы сверху и снизу
+                    .systemBarsPadding()
                     .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Распорка сверху
                 Spacer(modifier = Modifier.weight(0.3f))
 
                 Icon(
@@ -444,23 +442,20 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 PinDots(pinLength = pinInput.length, isError = isError)
 
-                // Главная распорка, выдавливающая клавиатуру вниз
                 Spacer(modifier = Modifier.weight(1f))
 
                 CustomNumpad(
-                    isBiometricEnabled = false, // При создании пароля биометрия не нужна
+                    isBiometricEnabled = false,
                     onBiometricClick = {},
                     onNumberClick = { digit ->
                         if (pinInput.length < 4 && !isError) {
                             pinInput += digit
                             if (pinInput.length == 4) {
                                 if (!isConfirmMode) {
-                                    // Переходим в режим подтверждения
                                     firstPin = pinInput
                                     pinInput = ""
                                     isConfirmMode = true
                                 } else {
-                                    // Проверяем совпадение
                                     if (pinInput == firstPin) {
                                         prefs.appPin = pinInput
                                         prefs.isPinEnabled = true
@@ -494,7 +489,6 @@ fun SettingsScreen(
         }
     }
 
-    // ДИАЛОГИ ПАПОК
     if (showAddDialog || folderToEdit != null) {
         var folderNameInput by remember { mutableStateOf(folderToEdit?.name ?: "") }
         AlertDialog(

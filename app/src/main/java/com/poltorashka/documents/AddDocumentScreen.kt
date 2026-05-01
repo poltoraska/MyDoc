@@ -3,13 +3,13 @@ package com.poltorashka.documents
 import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -21,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.poltorashka.documents.data.AppDatabase
@@ -31,7 +33,6 @@ import java.io.File
 import java.util.UUID
 
 private fun saveEncryptedFile(context: Context, uri: Uri): String? {
-    // Умное определение расширения: если PDF - пишет .pdf, иначе .jpg
     val mimeType = context.contentResolver.getType(uri)
     val extension = if (mimeType == "application/pdf") "pdf" else "jpg"
 
@@ -70,7 +71,6 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
-        // Теперь здесь могут быть и фото, и PDF
         selectedImages = selectedImages + uris
     }
 
@@ -91,16 +91,20 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
             Button(
                 onClick = {
                     coroutineScope.launch {
-                        // Использует новую функцию с новым названием
                         val savedPaths = selectedImages.mapNotNull { uri ->
                             saveEncryptedFile(context, uri)
+                        }
+
+                        // МАГИЯ ФОРМАТИРОВАНИЯ: Перед сохранением в БД превращаем цифры в дату
+                        val formattedFields = inputValues.mapValues { (key, value) ->
+                            if (key.contains("Дата", ignoreCase = true)) value.toDateString() else value
                         }
 
                         val newDocument = DocumentEntity(
                             profileId = profileId,
                             documentType = selectedType,
                             photoUris = savedPaths,
-                            fieldsData = inputValues.toMap()
+                            fieldsData = formattedFields
                         )
 
                         dao.insertDocument(newDocument)
@@ -151,10 +155,23 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
             Spacer(modifier = Modifier.height(16.dp))
 
             currentFields.forEach { fieldLabel ->
+                val isDateField = fieldLabel.contains("Дата", ignoreCase = true)
+
                 OutlinedTextField(
                     value = inputValues[fieldLabel] ?: "",
-                    onValueChange = { inputValues[fieldLabel] = it },
+                    onValueChange = { newValue ->
+                        if (isDateField) {
+                            // Оставляем только цифры и не больше 8
+                            val digits = newValue.filter { it.isDigit() }.take(8)
+                            inputValues[fieldLabel] = digits
+                        } else {
+                            inputValues[fieldLabel] = newValue
+                        }
+                    },
                     label = { Text(fieldLabel) },
+                    // Применяем маску и цифровую клавиатуру для дат
+                    visualTransformation = if (isDateField) DateTransformation() else VisualTransformation.None,
+                    keyboardOptions = if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                 )
             }
@@ -164,9 +181,7 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
             OutlinedButton(
                 onClick = { filePickerLauncher.launch(arrayOf("image/*", "application/pdf")) },
                 modifier = Modifier.fillMaxWidth().height(50.dp)
-            ) {
-                Text("Добавить файлы (${selectedImages.size})")
-            }
+            ) { Text("Добавить файлы (${selectedImages.size})") }
 
             Spacer(modifier = Modifier.height(16.dp))
 

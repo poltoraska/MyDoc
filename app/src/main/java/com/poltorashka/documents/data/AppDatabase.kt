@@ -8,6 +8,7 @@ import androidx.room.TypeConverters
 import android.util.Base64
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.poltorashka.documents.DatabaseMigrator
 import java.security.SecureRandom
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
