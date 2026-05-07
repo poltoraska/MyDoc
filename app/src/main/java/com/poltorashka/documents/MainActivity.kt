@@ -84,6 +84,16 @@ import java.util.Calendar
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.zIndex
 
 fun getDynamicGreeting(): String {
     val hour = java.time.LocalTime.now().hour
@@ -246,8 +256,6 @@ fun MainScreen(
     val folders by viewModel.folders.collectAsState()
     val manualSelectedId by viewModel.selectedFolderId.collectAsState()
     val docs by viewModel.documents.collectAsState()
-
-    // ФЛАГ ЗАГРУЗКИ
     val isLoading by viewModel.isLoading.collectAsState()
 
     val activeFolderId = manualSelectedId ?: folders.firstOrNull()?.id
@@ -268,10 +276,9 @@ fun MainScreen(
         }
     ) { innerPadding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
+            modifier = Modifier.fillMaxSize()
         ) {
-            // ШИКАРНЫЙ ВЕРХНИЙ БЛОК В СТИЛЕ MATERIAL EXPRESSIVE
+            // ШИКАРНЫЙ ВЕРХНИЙ БЛОК
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.secondaryContainer,
@@ -291,6 +298,7 @@ fun MainScreen(
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                         Spacer(modifier = Modifier.height(12.dp))
+
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = "${getDynamicGreeting()} ${if (userName.isNotEmpty()) "$userName!" else "!"}",
@@ -299,45 +307,13 @@ fun MainScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
 
-                            var isAnimated by remember { mutableStateOf(false) }
-
-                            LaunchedEffect(Unit) {
-                                isAnimated = true
-                            }
-
-                            val scale by animateFloatAsState(
-                                targetValue = if (isAnimated) 1f else 0f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessLow
-                                ),
-                                label = "wolfScale"
-                            )
-
-                            val alpha by animateFloatAsState(
-                                targetValue = if (isAnimated) 1f else 0f,
-                                animationSpec = tween(durationMillis = 600),
-                                label = "wolfAlpha"
-                            )
-
-                            Image(
-                                painter = painterResource(id = getGreetingIconResId()),
-                                contentDescription = "Маскот",
-                                modifier = Modifier
-                                    .size(35.dp)
-                                    .graphicsLayer(
-                                        scaleX = scale,
-                                        scaleY = scale,
-                                        alpha = alpha,
-                                        transformOrigin = TransformOrigin.Center
-                                    )
-                            )
+                            // ВЫЗОВ НАШЕГО НОВОГО НЕЗАВИСИМОГО КОМПОНЕНТА
+                            WolfMascotWithBubble()
                         }
                     }
 
                     Spacer(modifier = Modifier.height(32.dp))
 
-                    // Прячет меню папок, пока идет расшифровка
                     if (!isLoading && folders.isNotEmpty()) {
                         LazyRow(
                             modifier = Modifier.fillMaxWidth(),
@@ -346,32 +322,16 @@ fun MainScreen(
                         ) {
                             items(folders) { folder ->
                                 val isSelected = activeFolderId == folder.id
-
-                                val containerColor by animateColorAsState(
-                                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                                    label = "color"
-                                )
-                                val contentColor by animateColorAsState(
-                                    targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                    label = "color"
-                                )
+                                val containerColor by animateColorAsState(targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, label = "color")
+                                val contentColor by animateColorAsState(targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, label = "color")
 
                                 Surface(
                                     shape = RoundedCornerShape(50),
                                     color = containerColor,
-                                    modifier = Modifier
-                                        .height(48.dp)
-                                        .bounceClick { viewModel.selectFolder(folder.id) }
+                                    modifier = Modifier.height(48.dp).bounceClick { viewModel.selectFolder(folder.id) }
                                 ) {
-                                    Box(
-                                        modifier = Modifier.padding(horizontal = 24.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = folder.name,
-                                            color = contentColor,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                        )
+                                    Box(modifier = Modifier.padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
+                                        Text(text = folder.name, color = contentColor, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium)
                                     }
                                 }
                             }
@@ -388,80 +348,24 @@ fun MainScreen(
                     .padding(top = 16.dp)
             ) {
                 if (isLoading) {
-                    // НОВЫЙ ИНДИКАТОР ЗАГРУЗКИ ВМЕСТО МОРГАНИЯ
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(bottom = innerPadding.calculateBottomPadding()),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(28.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier.padding(32.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(32.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                CircularProgressIndicator(
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(48.dp),
-                                    strokeWidth = 4.dp,
-                                    strokeCap = StrokeCap.Round
-                                )
+                    Box(modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
+                        Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), modifier = Modifier.padding(32.dp)) {
+                            Column(modifier = Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp), strokeWidth = 4.dp, strokeCap = StrokeCap.Round)
                                 Spacer(modifier = Modifier.height(24.dp))
-                                Text(
-                                    text = "Открываем сейф...",
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Text("Открываем сейф...", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
                 } else if (folders.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(bottom = innerPadding.calculateBottomPadding()),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            shape = RoundedCornerShape(28.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "Перед добавлением первого документа необходимо создать папку в настройках приложения.",
-                                    textAlign = TextAlign.Center,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 15.sp,
-                                    lineHeight = 22.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
+                    Box(modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
+                        Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
+                            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Перед добавлением первого документа необходимо создать папку в настройках приложения.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
                                 Spacer(modifier = Modifier.height(24.dp))
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier
-                                        .height(44.dp)
-                                        .bounceClick { onSettingsClick() }
-                                ) {
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier = Modifier.padding(horizontal = 24.dp)
-                                    ) {
-                                        Text(
-                                            text = "Открыть настройки",
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimary
-                                        )
+                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.height(44.dp).bounceClick { onSettingsClick() }) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 24.dp)) {
+                                        Text("Открыть настройки", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                                     }
                                 }
                             }
@@ -480,7 +384,7 @@ fun MainScreen(
                         contentPadding = PaddingValues(bottom = innerPadding.calculateBottomPadding() + 16.dp)
                     ) {
                         gridItems(docs) { doc ->
-                            DocumentCard(title = doc.documentType, onClick = { onDocumentClick(doc.id) })
+                            DocumentCard(document = doc, onClick = { onDocumentClick(doc.id) })
                         }
                     }
                 }
@@ -489,41 +393,148 @@ fun MainScreen(
     }
 }
 
+// === НОВЫЙ КОМПОНЕНТ ДЛЯ ВОЛКА ===
 @Composable
-fun DocumentCard(title: String, onClick: () -> Unit) {
+fun WolfMascotWithBubble() {
+    val wolfPhrases = listOf(
+        "Ваши документы под\u00A0моей надежной лапой!",
+        "Сплю в\u00A0полглаза, охраняю ваши сканы.",
+        "Ни\u00A0один чужой нос сюда не\u00A0сунется! Аууу!",
+        "Сейф заперт. Ключ я, пожалуй, закопаю.",
+        "Р-р-р... Работает Jetpack Security!",
+        "Кто хороший мальчик? Я\u00A0хороший мальчик!",
+        "Пароли зашифрованы, хвост пистолетом!"
+    )
+
+    var showSpeechBubble by remember { mutableStateOf(false) }
+    var currentPhrase by remember { mutableStateOf("") }
+
+    LaunchedEffect(showSpeechBubble) {
+        if (showSpeechBubble) {
+            kotlinx.coroutines.delay(3500)
+            showSpeechBubble = false
+        }
+    }
+
+    var isAnimated by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { isAnimated = true }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isAnimated) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "wolfScale"
+    )
+
+    val alpha by animateFloatAsState(
+        targetValue = if (isAnimated) 1f else 0f,
+        animationSpec = tween(durationMillis = 600),
+        label = "wolfAlpha"
+    )
+
+    // Контейнер Box, который Row видит как элемент размером 35dp
+    Box(
+        modifier = Modifier.size(35.dp),
+        contentAlignment = Alignment.BottomCenter // Облачко будет расти вверх от центра
+    ) {
+        // Сам маскот лежит в основе Box
+        Image(
+            painter = painterResource(id = getGreetingIconResId()),
+            contentDescription = "Маскот",
+            modifier = Modifier
+                .fillMaxSize() // Заполняет 35dp Box
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    alpha = alpha,
+                    transformOrigin = TransformOrigin.Center
+                )
+                .bounceClick {
+                    // При нажатии выбирает случайную фразу и показывает облачко
+                    currentPhrase = wolfPhrases.random()
+                    showSpeechBubble = true
+                }
+        )
+
+        // Облачко
+        AnimatedVisibility(
+            visible = showSpeechBubble,
+            enter = fadeIn(animationSpec = tween(400)),
+            exit = fadeOut(animationSpec = tween(400)),
+            modifier = Modifier
+                .wrapContentSize(unbounded = true)
+                .offset(y = (-38).dp, x = (-10).dp)
+                .widthIn(max = 220.dp)
+                .zIndex(10f)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.primary,
+                shadowElevation = 6.dp
+            ) {
+                Text(
+                    text = currentPhrase,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    lineHeight = 16.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DocumentCard(
+    document: com.poltorashka.documents.data.DocumentEntity,
+    onClick: () -> Unit
+) {
+    val rawTitle = if (document.documentType == "Другое") {
+        document.fieldsData["Название документа"]?.ifBlank { "Другое" } ?: "Другое"
+    } else {
+        document.documentType
+    }
+    val displayTitle = rawTitle.replace(" о ", " о\u00A0")
+
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .height(140.dp) // Сделал карточки чуть выше
+            .height(140.dp)
             .clip(RoundedCornerShape(24.dp))
             .bounceClick { onClick() },
         colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant // Более глубокий цвет подложки
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
 
+            // Твоя текстура гильош
             Image(
                 painter = painterResource(id = R.drawable.pattern_guilloche),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .alpha(0.2f), // Текстура почти прозрачная
+                    .alpha(0.2f),
                 contentScale = ContentScale.Crop
             )
 
             // --- СЛОЙ ТЕКСТА ---
             Text(
-                // Оставляет фикс висячих предлогов
-                text = title.replace(" о ", " о\u00A0"),
-                fontWeight = FontWeight.SemiBold, // Сделал чуть жирнее
+                text = displayTitle,
+                fontWeight = FontWeight.SemiBold,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .align(Alignment.Center)
                     .padding(16.dp),
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                // Защиту от слишком длинных названий в "Другом"
+                maxLines = 3,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
     }

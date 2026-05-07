@@ -74,7 +74,8 @@ fun SearchScreen(
         } else {
             allDocs.filter { doc ->
                 val matchType = doc.documentType.contains(searchQuery, ignoreCase = true)
-                val matchFields = doc.fieldsData.values.any { it.contains(searchQuery, ignoreCase = true) }
+                val matchFields =
+                    doc.fieldsData.values.any { it.contains(searchQuery, ignoreCase = true) }
                 matchType || matchFields
             }
         }
@@ -133,11 +134,21 @@ fun SearchScreen(
                         onValueChange = { searchQuery = it },
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text("Название, номер или данные...") },
-                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Filled.Search,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
                                 IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(Icons.Filled.Clear, contentDescription = "Очистить", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Icon(
+                                        Icons.Filled.Clear,
+                                        contentDescription = "Очистить",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         },
@@ -187,7 +198,10 @@ fun SearchScreen(
                     }
                 } else if (filteredDocs.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("По вашему запросу ничего не найдено", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "По вашему запросу ничего не найдено",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 } else {
                     LazyVerticalGrid(
@@ -198,7 +212,7 @@ fun SearchScreen(
                         contentPadding = PaddingValues(bottom = innerPadding.calculateBottomPadding() + 16.dp)
                     ) {
                         items(filteredDocs) { doc ->
-                            DocumentCard(title = doc.documentType, onClick = { onDocumentClick(doc.id) })
+                            DocumentCard(document = doc, onClick = { onDocumentClick(doc.id) })
                         }
                     }
                 }
