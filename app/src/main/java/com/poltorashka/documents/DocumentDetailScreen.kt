@@ -282,6 +282,96 @@ fun DocumentDetailScreen(
     }
 
     Scaffold(
+        // Фон для всего экрана здесь
+        containerColor = MaterialTheme.colorScheme.background,
+        // Перенос шапки в слот topBar
+        topBar = {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
+                shadowElevation = 2.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 80.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
+                ) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .size(44.dp)
+                                .bounceClick { if (isEditing) isEditing = false else onBackClick() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (isEditing) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = if (isEditing) "Отмена" else "Назад",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.align(Alignment.CenterEnd),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (isEditing) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .height(44.dp)
+                                        .bounceClick {
+                                            val formattedFields = editedFields.mapValues { (key, value) ->
+                                                if (key.contains("Дата", ignoreCase = true)) value.toDateString() else value
+                                            }
+                                            document?.let { doc -> viewModel.updateFields(doc, formattedFields) }
+                                            isEditing = false
+                                        }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) {
+                                        Text("Сохранить", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
+                                    }
+                                }
+                            } else {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(44.dp).bounceClick { showDeleteDocDialog = true }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Filled.Delete, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(44.dp).bounceClick { isEditing = true }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Filled.Edit, contentDescription = "Редактировать", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Text(
+                        text = if (isEditing) "Редактирование" else (document?.documentType?.replace(" о ", " о\u00A0") ?: "Загрузка..."),
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+        },
         floatingActionButton = {
             if (!isEditing && document != null) {
                 Surface(
@@ -325,205 +415,110 @@ fun DocumentDetailScreen(
             }
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(bottom = innerPadding.calculateBottomPadding())
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
-                shadowElevation = 2.dp
+        document?.let { doc ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    // Контент теперь скроллится на весь экран
+                    .verticalScroll(rememberScrollState())
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 80.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
+                Spacer(modifier = Modifier.height(innerPadding.calculateTopPadding() + 24.dp))
+
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                    shape = RoundedCornerShape(28.dp)
                 ) {
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surface,
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .size(44.dp)
-                                .bounceClick { if (isEditing) isEditing = false else onBackClick() }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = if (isEditing) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = if (isEditing) "Отмена" else "Назад",
-                                    tint = MaterialTheme.colorScheme.onSurface
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        val orderedLabels = com.poltorashka.documents.data.DocumentTemplates.getFieldsForType(doc.documentType)
+                        val extraLabels = doc.fieldsData.keys.filter { !orderedLabels.contains(it) }
+                        val finalLabels = orderedLabels + extraLabels
+
+                        if (isEditing) {
+                            finalLabels.forEach { label ->
+                                val isDateField = label.contains("Дата", ignoreCase = true)
+
+                                OutlinedTextField(
+                                    value = editedFields[label] ?: "",
+                                    onValueChange = { newValue ->
+                                        if (isDateField) {
+                                            val digits = newValue.filter { it.isDigit() }.take(8)
+                                            editedFields[label] = digits
+                                        } else {
+                                            editedFields[label] = newValue
+                                        }
+                                    },
+                                    label = { Text(label) },
+                                    visualTransformation = if (isDateField) DateTransformation() else VisualTransformation.None,
+                                    keyboardOptions = if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                                 )
                             }
-                        }
-
-                        Row(
-                            modifier = Modifier.align(Alignment.CenterEnd),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (isEditing) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier
-                                        .height(44.dp)
-                                        .bounceClick {
-                                            // Перед сохранением конвертируем цифры обратно в формат DD.MM.YYYY
-                                            val formattedFields = editedFields.mapValues { (key, value) ->
-                                                if (key.contains("Дата", ignoreCase = true)) value.toDateString() else value
+                        } else {
+                            finalLabels.forEach { label ->
+                                if (doc.fieldsData.containsKey(label)) {
+                                    val value = doc.fieldsData[label] ?: ""
+                                    DetailField(
+                                        label = label,
+                                        value = value,
+                                        onCopy = { textToCopy ->
+                                            if (textToCopy.isNotBlank()) {
+                                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                val clip = android.content.ClipData.newPlainText("Скопировано", textToCopy)
+                                                clipboard.setPrimaryClip(clip)
+                                                Toast.makeText(context, "Скопировано", Toast.LENGTH_SHORT).show()
                                             }
-                                            document?.let { doc -> viewModel.updateFields(doc, formattedFields) }
-                                            isEditing = false
                                         }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) {
-                                        Text("Сохранить", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
-                                    }
-                                }
-                            } else {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(44.dp).bounceClick { showDeleteDocDialog = true }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Filled.Delete, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
-                                    }
-                                }
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(44.dp).bounceClick { isEditing = true }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Filled.Edit, contentDescription = "Редактировать", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Text(
-                        text = if (isEditing) "Редактирование" else (document?.documentType?.replace(" о ", " о\u00A0") ?: "Загрузка..."),
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-            }
-
-            document?.let { doc ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp)
-                        .padding(top = 24.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    ElevatedCard(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                        shape = RoundedCornerShape(28.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(20.dp)) {
-                            val orderedLabels = com.poltorashka.documents.data.DocumentTemplates.getFieldsForType(doc.documentType)
-                            val extraLabels = doc.fieldsData.keys.filter { !orderedLabels.contains(it) }
-                            val finalLabels = orderedLabels + extraLabels
-
-                            if (isEditing) {
-                                finalLabels.forEach { label ->
-                                    val isDateField = label.contains("Дата", ignoreCase = true)
-
-                                    OutlinedTextField(
-                                        value = editedFields[label] ?: "",
-                                        onValueChange = { newValue ->
-                                            if (isDateField) {
-                                                // Для даты разрешаем только цифры и максимум 8 штук
-                                                val digits = newValue.filter { it.isDigit() }.take(8)
-                                                editedFields[label] = digits
-                                            } else {
-                                                editedFields[label] = newValue
-                                            }
-                                        },
-                                        label = { Text(label) },
-                                        visualTransformation = if (isDateField) DateTransformation() else VisualTransformation.None,
-                                        keyboardOptions = if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                                     )
                                 }
-                            } else {
-                                finalLabels.forEach { label ->
-                                    if (doc.fieldsData.containsKey(label)) {
-                                        val value = doc.fieldsData[label] ?: ""
-                                        DetailField(
-                                            label = label,
-                                            value = value,
-                                            onCopy = { textToCopy ->
-                                                if (textToCopy.isNotBlank()) {
-                                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                                    val clip = android.content.ClipData.newPlainText("Скопировано", textToCopy)
-                                                    clipboard.setPrimaryClip(clip)
-                                                    Toast.makeText(context, "Скопировано", Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
-                                        )
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Файлы (${doc.photoUris.size})", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        modifier = Modifier
+                            .height(36.dp)
+                            .bounceClick { filePickerLauncher.launch(arrayOf("image/*", "application/pdf")) }
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 16.dp)) {
+                            Text("+ Добавить", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        }
+                    }
+                }
+
+                if (doc.photoUris.isEmpty()) {
+                    Text("Файлы еще не добавлены", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                } else {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    ) {
+                        items(doc.photoUris) { path ->
+                            FileItem(
+                                path = path,
+                                onDelete = { imageToDelete = path },
+                                onOpen = {
+                                    if (path.endsWith(".pdf", ignoreCase = true)) {
+                                        openPdfFile(context, path)
+                                    } else {
+                                        imageToShow = path
                                     }
                                 }
-                            }
+                            )
                         }
                     }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Файлы (${doc.photoUris.size})", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            modifier = Modifier
-                                .height(36.dp)
-                                .bounceClick { filePickerLauncher.launch(arrayOf("image/*", "application/pdf")) }
-                        ) {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 16.dp)) {
-                                Text("+ Добавить", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                            }
-                        }
-                    }
-
-                    if (doc.photoUris.isEmpty()) {
-                        Text("Файлы еще не добавлены", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
-                    } else {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        ) {
-                            items(doc.photoUris) { path ->
-                                FileItem(
-                                    path = path,
-                                    onDelete = { imageToDelete = path },
-                                    onOpen = {
-                                        if (path.endsWith(".pdf", ignoreCase = true)) {
-                                            openPdfFile(context, path)
-                                        } else {
-                                            imageToShow = path
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(80.dp))
                 }
+                Spacer(modifier = Modifier.height(80.dp + innerPadding.calculateBottomPadding()))
             }
         }
     }

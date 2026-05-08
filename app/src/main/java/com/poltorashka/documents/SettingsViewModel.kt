@@ -48,6 +48,22 @@ class SettingsViewModel(
             folderDao.updateFolders(updatedList)
         }
     }
+
+    // --- ФУНКЦИИ РЕЗЕРВНОГО КОПИРОВАНИЯ  ---
+
+    fun createBackup(context: android.content.Context, uri: android.net.Uri, password: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val success = com.poltorashka.documents.utils.BackupManager.createBackup(context, uri, password)
+            onResult(success)
+        }
+    }
+
+    fun restoreBackup(context: android.content.Context, uri: android.net.Uri, password: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val success = com.poltorashka.documents.utils.BackupManager.restoreBackup(context, uri, password)
+            onResult(success)
+        }
+    }
 }
 
 class SettingsViewModelFactory(private val folderDao: FolderDao, private val docDao: DocumentDao) : ViewModelProvider.Factory {

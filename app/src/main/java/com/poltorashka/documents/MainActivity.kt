@@ -265,20 +265,9 @@ fun MainScreen(
 
     Scaffold(
         containerColor = Color.Transparent,
-        bottomBar = {
-            CustomFloatingToolbar(
-                activeTab = 0,
-                onHomeClick = { },
-                onSearchClick = onSearchClick,
-                onSettingsClick = onSettingsClick,
-                onAddClick = { activeFolderId?.let { onAddClick(it) } }
-            )
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            // ШИКАРНЫЙ ВЕРХНИЙ БЛОК
+        // ИЗМЕНЕНИЕ 1: Переносим всю шапку в специальный слой topBar.
+        // Scaffold сам поднимет её поверх контента и динамически посчитает её высоту.
+        topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.secondaryContainer,
@@ -306,8 +295,6 @@ fun MainScreen(
                                 color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-
-                            // ВЫЗОВ НАШЕГО НОВОГО НЕЗАВИСИМОГО КОМПОНЕНТА
                             WolfMascotWithBubble()
                         }
                     }
@@ -339,53 +326,64 @@ fun MainScreen(
                     }
                 }
             }
-
-            // ОСНОВНОЙ БЛОК С КАРТОЧКАМИ ДОКУМЕНТОВ
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 16.dp)
-            ) {
-                if (isLoading) {
-                    Box(modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
-                        Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), modifier = Modifier.padding(32.dp)) {
-                            Column(modifier = Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp), strokeWidth = 4.dp, strokeCap = StrokeCap.Round)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text("Открываем сейф...", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
+        },
+        bottomBar = {
+            CustomFloatingToolbar(
+                activeTab = 0,
+                onHomeClick = { },
+                onSearchClick = onSearchClick,
+                onSettingsClick = onSettingsClick,
+                onAddClick = { activeFolderId?.let { onAddClick(it) } }
+            )
+        }
+    ) { innerPadding ->
+        // ОСНОВНОЙ БЛОК С КАРТОЧКАМИ ДОКУМЕНТОВ
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
+        ) {
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
+                    Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), modifier = Modifier.padding(32.dp)) {
+                        Column(modifier = Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp), strokeWidth = 4.dp, strokeCap = StrokeCap.Round)
+                            Spacer(modifier = Modifier.height(24.dp))
+                            Text("Открываем сейф...", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                } else if (folders.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
-                        Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
-                            Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Перед добавлением первого документа необходимо создать папку в настройках приложения.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.height(44.dp).bounceClick { onSettingsClick() }) {
-                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 24.dp)) {
-                                        Text("Открыть настройки", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
-                                    }
+                }
+            } else if (folders.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
+                    Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
+                        Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Перед добавлением первого документа необходимо создать папку в настройках приложения.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
+                            Spacer(modifier = Modifier.height(24.dp))
+                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.height(44.dp).bounceClick { onSettingsClick() }) {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 24.dp)) {
+                                    Text("Открыть настройки", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                                 }
                             }
                         }
                     }
-                } else if (docs.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
-                        Text("В этой папке пока нет документов", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = innerPadding.calculateBottomPadding() + 16.dp)
-                    ) {
-                        gridItems(docs) { doc ->
-                            DocumentCard(document = doc, onClick = { onDocumentClick(doc.id) })
-                        }
+                }
+            } else if (docs.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
+                    Text("В этой папке пока нет документов", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        top = innerPadding.calculateTopPadding() + 16.dp,
+                        bottom = innerPadding.calculateBottomPadding() + 16.dp
+                    )
+                ) {
+                    gridItems(docs) { doc ->
+                        DocumentCard(document = doc, onClick = { onDocumentClick(doc.id) })
                     }
                 }
             }
