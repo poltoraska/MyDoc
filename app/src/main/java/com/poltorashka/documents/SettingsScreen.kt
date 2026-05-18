@@ -53,6 +53,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -90,6 +91,8 @@ fun SettingsScreen(
     val context = LocalContext.current
     val prefs = remember { UserPreferences(context) }
     var userName by remember { mutableStateOf(prefs.userName) }
+    var themeModeState by remember { mutableIntStateOf(prefs.themeMode) }
+    var isDynamicColorState by remember { mutableStateOf(prefs.useDynamicColor) }
 
     val folders by viewModel.folders.collectAsState()
     val localFolders = remember(folders) { folders.toMutableStateList() }
@@ -409,7 +412,7 @@ fun SettingsScreen(
                 }
             }
 
-            // --- НОВЫЙ БЛОК 4: РЕЗЕРВНОЕ КОПИРОВАНИЕ ---
+            // --- БЛОК 4: РЕЗЕРВНОЕ КОПИРОВАНИЕ ---
             Surface(
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
@@ -456,6 +459,80 @@ fun SettingsScreen(
                             Box(contentAlignment = Alignment.Center) {
                                 Text("Восстановить", color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
+                        }
+                    }
+                }
+            }
+
+            // --- БЛОК 5: ОФОРМЛЕНИЕ ---
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text("Оформление", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Переключатель темы (Три кнопки в ряд)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val themes = listOf("Авто", "Светлая", "Тёмная")
+                        themes.forEachIndexed { index, title ->
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (themeModeState == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(40.dp)
+                                    .bounceClick {
+                                        themeModeState = index
+                                        prefs.themeMode = index
+                                        // Мгновенно пересоздает активити для применения темы
+                                        (context as? android.app.Activity)?.recreate()
+                                    }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = title,
+                                        color = if (themeModeState == index) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Тумблер динамических цветов (показывается только на Android 12 и выше)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Динамические цвета", fontSize = 16.sp)
+                                Text(
+                                    "Палитра подстраивается под обои (Material You)",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            androidx.compose.material3.Switch(
+                                checked = isDynamicColorState,
+                                onCheckedChange = {
+                                    isDynamicColorState = it
+                                    prefs.useDynamicColor = it
+                                    // Мгновенно пересоздает активити для смены палитры
+                                    (context as? android.app.Activity)?.recreate()
+                                }
+                            )
                         }
                     }
                 }

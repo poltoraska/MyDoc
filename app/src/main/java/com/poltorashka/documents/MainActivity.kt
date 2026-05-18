@@ -120,7 +120,12 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            DocumentsTheme {
+            val context = LocalContext.current
+            val prefs = remember { UserPreferences(applicationContext) }
+            DocumentsTheme(
+                themeMode = prefs.themeMode,
+                dynamicColor = prefs.useDynamicColor
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

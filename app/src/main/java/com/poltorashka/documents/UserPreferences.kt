@@ -24,4 +24,14 @@ class UserPreferences(context: Context) {
     var isBiometricEnabled: Boolean
         get() = prefs.getBoolean("BIOMETRIC_ENABLED", false)
         set(value) = prefs.edit().putBoolean("BIOMETRIC_ENABLED", value).apply()
+
+    // 0 = Авто (Системная), 1 = Светлая, 2 = Тёмная
+    var themeMode: Int
+        get() = prefs.getInt("theme_mode", 0)
+        set(value) = prefs.edit().putInt("theme_mode", value).apply()
+
+    // Использовать ли цвета от обоев (Material You)
+    var useDynamicColor: Boolean
+        get() = prefs.getBoolean("use_dynamic_color", true)
+        set(value) = prefs.edit().putBoolean("use_dynamic_color", value).apply()
 }
