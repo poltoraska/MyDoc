@@ -532,10 +532,22 @@ fun SettingsScreen(
                         showRestoreDialog = false
                         android.widget.Toast.makeText(context, "Восстановление...", android.widget.Toast.LENGTH_SHORT).show()
 
+                        // Важное ИЗМЕНЕНИЕ: Закрывает коннект Room, освобождая файлы на диске
+                        try {
+                            com.poltorashka.documents.data.AppDatabase.getDatabase(context).close()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+
                         viewModel.restoreBackup(context, selectedRestoreUri!!, restorePasswordInput) { success ->
                             if (success) {
-                                android.widget.Toast.makeText(context, "Данные восстановлены! Перезапустите приложение.", android.widget.Toast.LENGTH_LONG).show()
-                                // Желательно закрыть приложение или вернуть пользователя на стартовый экран для перезагрузки базы
+                                android.widget.Toast.makeText(context, "Данные восстановлены успешно!", android.widget.Toast.LENGTH_LONG).show()
+
+                                // Даёт микропаузу, чтобы тост успел показаться, и жестко перезапускает процесс
+                                kotlin.concurrent.thread {
+                                    Thread.sleep(1500)
+                                    Runtime.getRuntime().exit(0)
+                                }
                             } else {
                                 android.widget.Toast.makeText(context, "Ошибка! Неверный пароль или файл поврежден.", android.widget.Toast.LENGTH_LONG).show()
                             }

@@ -1,5 +1,7 @@
 package com.poltorashka.documents
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -18,14 +20,18 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -33,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,34 +48,31 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import bounceClick
+import kotlinx.coroutines.launch
 
 @Composable
 fun OnboardingScreen(onFinish: () -> Unit) {
-    // Состояние, которое хранит текущий шаг онбординга (0 - приветствие, 1 - имя)
     var currentStep by remember { mutableIntStateOf(0) }
-
     val context = LocalContext.current
     val prefs = remember { UserPreferences(context) }
 
-    // Плавное переключение между экранами
     Crossfade(targetState = currentStep, label = "onboarding_animation") { step ->
         when (step) {
             0 -> WelcomeStep(
-                onNext = { currentStep = 1 } // По клику переход на второй экран
+                onNext = { currentStep = 1 }
             )
             1 -> NameSetupStep(
                 onFinish = { name ->
-                    // Если имя ввели, сохраняет его в настройки
                     if (name.isNotBlank()) {
                         prefs.userName = name.trim()
                     }
-                    // Отмечает, что онбординг пройден навсегда
                     prefs.isOnboardingCompleted = true
-                    // Сообщает MainActivity, что можно пускать в приложение
                     onFinish()
                 }
             )
@@ -76,7 +80,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
     }
 }
 
-// --- ШАГ 1: ЭКРАН ПРИВЕТСТВИЯ ---
+// --- ШАГ 1: ЭКРАН ПРИВЕТСТВИЯ (БЕЗ ИЗМЕНЕНИЙ) ---
 @Composable
 fun WelcomeStep(onNext: () -> Unit) {
     val uriHandler = LocalUriHandler.current
@@ -138,9 +142,8 @@ fun WelcomeStep(onNext: () -> Unit) {
                 Spacer(modifier = Modifier.height(24.dp))
                 FeatureItem(iconRes = R.drawable.ic_cloud_off, text = "Загружайте файлы и\u00A0получайте к\u00A0ним доступ без\u00A0интернета.")
 
-                Spacer(modifier = Modifier.height(40.dp)) // Чуть уменьшили отступ, чтобы влез текст снизу
+                Spacer(modifier = Modifier.height(40.dp))
 
-                // Кнопка Начать
                 Surface(
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primary,
@@ -166,7 +169,6 @@ fun WelcomeStep(onNext: () -> Unit) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // НОВЫЙ БЛОК: Ссылка на политику
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = "Продолжая, вы принимаете условия",
@@ -199,10 +201,27 @@ fun FeatureItem(iconRes: Int, text: String) {
     }
 }
 
-// --- ШАГ 2: ЭКРАН ВВОДА ИМЕНИ ---
+// --- ШАГ 2: ЭКРАН ВВОДА ИМЕНИ С ВОССТАНОВЛЕНИЕМ ---
 @Composable
 fun NameSetupStep(onFinish: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val prefs = remember { UserPreferences(context) }
+
+    // Состояния для восстановления
+    var showRestoreDialog by remember { mutableStateOf(false) }
+    var restorePasswordInput by remember { mutableStateOf("") }
+    var selectedRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            selectedRestoreUri = uri
+            showRestoreDialog = true
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -222,14 +241,12 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
 
         Spacer(modifier = Modifier.height(64.dp))
 
-        // Поле ввода имени (по стандартам Material 3)
         TextField(
             value = name,
             onValueChange = { name = it },
             label = { Text("Имя") },
             placeholder = { Text("Введите ваше имя") },
             trailingIcon = {
-                // Иконка крестика появляется только если текст не пустой
                 if (name.isNotEmpty()) {
                     IconButton(onClick = { name = "" }) {
                         Icon(Icons.Filled.Clear, contentDescription = "Очистить")
@@ -261,7 +278,6 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
         Spacer(modifier = Modifier.height(48.dp))
 
         Image(
-            // ФАЙЛ С ЛАПКАМИ
             painter = painterResource(id = R.drawable.img_wolf_keyboard),
             contentDescription = "Лапки на клавиатуре",
             modifier = Modifier
@@ -273,7 +289,6 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // Кнопка "Далее"
         Surface(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.primary,
@@ -302,7 +317,76 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
             }
         }
 
-        // Увеличенный отступ от самого низа экрана
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Кнопка восстановления
+        Text(
+            text = "У меня уже есть резервная копия",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .bounceClick { importLauncher.launch(arrayOf("*/*")) }
+                .padding(8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+    }
+
+    // ДИАЛОГ ВОССТАНОВЛЕНИЯ
+    if (showRestoreDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestoreDialog = false; selectedRestoreUri = null },
+            title = { Text("Восстановление") },
+            text = {
+                Column {
+                    Text("Введите пароль, который вы указывали при создании этой резервной копии.", fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = restorePasswordInput,
+                        onValueChange = { restorePasswordInput = it },
+                        label = { Text("Пароль") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (restorePasswordInput.isNotBlank() && selectedRestoreUri != null) {
+                        showRestoreDialog = false
+                        android.widget.Toast.makeText(context, "Распаковка архива...", android.widget.Toast.LENGTH_SHORT).show()
+
+                        // Превентивно закрываем БД (хотя она тут скорее всего и не открывалась)
+                        try {
+                            com.poltorashka.documents.data.AppDatabase.getDatabase(context).close()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+
+                        scope.launch {
+                            val success = com.poltorashka.documents.utils.BackupManager.restoreBackup(context, selectedRestoreUri!!, restorePasswordInput)
+                            if (success) {
+                                android.widget.Toast.makeText(context, "Данные восстановлены успешно!", android.widget.Toast.LENGTH_LONG).show()
+
+                                kotlin.concurrent.thread {
+                                    Thread.sleep(1500)
+                                    Runtime.getRuntime().exit(0)
+                                }
+                            } else {
+                                android.widget.Toast.makeText(context, "Ошибка! Неверный пароль или файл поврежден.", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                            selectedRestoreUri = null
+                            restorePasswordInput = ""
+                        }
+                    }
+                }) { Text("Восстановить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestoreDialog = false; selectedRestoreUri = null }) { Text("Отмена") }
+            }
+        )
     }
 }

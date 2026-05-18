@@ -82,23 +82,10 @@ fun SearchScreen(
     }
 
     Scaffold(
-        bottomBar = {
-            CustomFloatingToolbar(
-                activeTab = 1,
-                onHomeClick = onHomeClick,
-                onSearchClick = { },
-                onSettingsClick = onSettingsClick,
-                onAddClick = onAddClick
-            )
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(bottom = innerPadding.calculateBottomPadding())
-        ) {
-            // --- ШАПКА ---
+        // ИЗМЕНЕНИЕ 1: Прозрачный фон для всего Scaffold
+        containerColor = Color.Transparent,
+        // ИЗМЕНЕНИЕ 2: Перенос шапки в topBar
+        topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.secondaryContainer,
@@ -122,7 +109,6 @@ fun SearchScreen(
                         Image(
                             painter = painterResource(id = R.drawable.serch_icon),
                             contentDescription = "Иконка приложения",
-
                             modifier = Modifier.size(30.dp)
                         )
                     }
@@ -163,57 +149,66 @@ fun SearchScreen(
                     )
                 }
             }
+        },
+        bottomBar = {
+            CustomFloatingToolbar(
+                activeTab = 1,
+                onHomeClick = onHomeClick,
+                onSearchClick = { },
+                onSettingsClick = onSettingsClick,
+                onAddClick = onAddClick
+            )
+        }
+    ) { innerPadding ->
+        // --- РЕЗУЛЬТАТЫ ПОИСКА ---
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
+            // ИЗМЕНЕНИЕ 3: Убраны жесткие отступы и background
+        ) {
+            if (searchQuery.isBlank()) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.img_wolf_keyboard),
+                        contentDescription = "Иллюстрация поиска",
+                        modifier = Modifier
+                            .size(160.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
 
-            // --- РЕЗУЛЬТАТЫ ПОИСКА ---
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 24.dp)
-            ) {
-                if (searchQuery.isBlank()) {
-                    // ИЗМЕНЕНИЕ 2: Большая иллюстрация по центру
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-
-                        Image(
-
-                            painter = painterResource(id = R.drawable.img_wolf_keyboard),
-                            contentDescription = "Иллюстрация поиска",
-                            modifier = Modifier
-                                .size(160.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-
-
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Text(
-                            text = "Введите данные для поиска",
-                            fontSize = 15.sp,
-                        )
-                    }
-                } else if (filteredDocs.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            "По вашему запросу ничего не найдено",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = innerPadding.calculateBottomPadding() + 16.dp)
-                    ) {
-                        items(filteredDocs) { doc ->
-                            DocumentCard(document = doc, onClick = { onDocumentClick(doc.id) })
-                        }
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "Введите данные для поиска",
+                        fontSize = 15.sp,
+                    )
+                }
+            } else if (filteredDocs.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        "По вашему запросу ничего не найдено",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    // ИЗМЕНЕНИЕ 4: Динамические отступы переданы прямо внутрь скроллящейся сетки
+                    contentPadding = PaddingValues(
+                        top = innerPadding.calculateTopPadding() + 16.dp,
+                        bottom = innerPadding.calculateBottomPadding() + 16.dp
+                    )
+                ) {
+                    items(filteredDocs) { doc ->
+                        DocumentCard(document = doc, onClick = { onDocumentClick(doc.id) })
                     }
                 }
             }
