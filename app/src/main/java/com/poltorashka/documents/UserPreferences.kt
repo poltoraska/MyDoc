@@ -34,4 +34,9 @@ class UserPreferences(context: Context) {
     var useDynamicColor: Boolean
         get() = prefs.getBoolean("use_dynamic_color", true)
         set(value) = prefs.edit().putBoolean("use_dynamic_color", value).apply()
+
+    // Время, когда приложение было свернуто (в миллисекундах)
+    var backgroundTimestamp: Long
+        get() = prefs.getLong("background_timestamp", 0L)
+        set(value) = prefs.edit().putLong("background_timestamp", value).apply()
 }

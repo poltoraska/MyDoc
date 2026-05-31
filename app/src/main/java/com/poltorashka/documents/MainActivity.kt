@@ -94,6 +94,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.ui.zIndex
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 fun getDynamicGreeting(): String {
     val hour = java.time.LocalTime.now().hour
@@ -121,7 +125,8 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val context = LocalContext.current
-            val prefs = remember { UserPreferences(applicationContext) }
+            val prefs = remember { UserPreferences(context) }
+
             DocumentsTheme(
                 themeMode = prefs.themeMode,
                 dynamicColor = prefs.useDynamicColor
@@ -130,118 +135,175 @@ class MainActivity : FragmentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val navController = rememberNavController()
-                    val context = LocalContext.current
+                    // --- ЛОГИКА ТАЙМАУТА БЛОКИРОВКИ ---
+                    var isTimeoutLocked by remember { mutableStateOf(false) }
+                    val lifecycleOwner = LocalLifecycleOwner.current
+
+                    DisposableEffect(lifecycleOwner) {
+                        val observer = LifecycleEventObserver { _, event ->
+                            when (event) {
+                                Lifecycle.Event.ON_STOP -> {
+                                    // Приложение свернуто - засекается время
+                                    prefs.backgroundTimestamp = System.currentTimeMillis()
+                                }
+                                Lifecycle.Event.ON_START -> {
+                                    // Приложение развернуто - проверяется время
+                                    val lastTime = prefs.backgroundTimestamp
+                                    if (lastTime > 0) {
+                                        val timePassed = System.currentTimeMillis() - lastTime
+                                        // 120_000 мс = 2 минуты
+                                        if (timePassed > 120_000 && (prefs.isPinEnabled || prefs.isBiometricEnabled)) {
+                                            isTimeoutLocked = true
+                                        }
+                                    }
+                                }
+                                else -> {}
+                            }
+                        }
+                        lifecycleOwner.lifecycle.addObserver(observer)
+                        onDispose {
+                            lifecycleOwner.lifecycle.removeObserver(observer)
+                        }
+                    }
+
+                    // База данных и ViewModel
                     val db = AppDatabase.getDatabase(context)
                     val viewModel: DocumentsViewModel = viewModel(
                         factory = DocumentsViewModelFactory(db.documentDao(), db.folderDao())
                     )
 
-                    val prefs = remember { UserPreferences(context) }
+                    val navController = rememberNavController()
                     val startScreen = if (!prefs.isOnboardingCompleted) "onboarding" else if (prefs.isPinEnabled) "auth" else "main"
-
                     val tabRoutes = listOf("main", "settings", "search")
 
-                    NavHost(
-                        navController = navController,
-                        startDestination = startScreen,
+                    // Навигация в Box, чтобы иметь возможность рисовать оверлей блокировки
+                    Box(modifier = Modifier.fillMaxSize()) {
 
-                        enterTransition = {
-                            if (initialState.destination.route in tabRoutes && targetState.destination.route in tabRoutes) {
-                                fadeIn(animationSpec = tween(300))
-                            } else {
-                                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(400))
-                            }
-                        },
-                        exitTransition = {
-                            if (initialState.destination.route in tabRoutes && targetState.destination.route in tabRoutes) {
-                                fadeOut(animationSpec = tween(300))
-                            } else {
-                                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(400))
-                            }
-                        },
-                        popEnterTransition = {
-                            slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(400))
-                        },
-                        popExitTransition = {
-                            slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(400))
-                        }
-                    ) {
+                        // ОСНОВНАЯ НАВИГАЦИЯ
+                        NavHost(
+                            navController = navController,
+                            startDestination = startScreen,
 
-                        composable("onboarding") {
-                            OnboardingScreen(
-                                onFinish = {
-                                    navController.navigate("main") {
-                                        popUpTo("onboarding") { inclusive = true }
+                            enterTransition = {
+                                if (initialState.destination.route in tabRoutes && targetState.destination.route in tabRoutes) {
+                                    fadeIn(animationSpec = tween(300))
+                                } else {
+                                    slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(400))
+                                }
+                            },
+                            exitTransition = {
+                                if (initialState.destination.route in tabRoutes && targetState.destination.route in tabRoutes) {
+                                    fadeOut(animationSpec = tween(300))
+                                } else {
+                                    slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(400))
+                                }
+                            },
+                            popEnterTransition = {
+                                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(400))
+                            },
+                            popExitTransition = {
+                                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(400))
+                            }
+                        ) {
+
+                            composable("onboarding") {
+                                OnboardingScreen(
+                                    onFinish = {
+                                        navController.navigate("main") {
+                                            popUpTo("onboarding") { inclusive = true }
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
+
+                            composable("main") {
+                                MainScreen(
+                                    onDocumentClick = { id -> navController.navigate("detail/$id") },
+                                    onAddClick = { folderId -> navController.navigate("add/$folderId") },
+                                    onSettingsClick = { navController.navigate("settings") { launchSingleTop = true } },
+                                    onSearchClick = { navController.navigate("search") { launchSingleTop = true } },
+                                    viewModel = viewModel
+                                )
+                            }
+
+                            // Холодный старт экран авторизации через навигацию
+                            composable("auth") {
+                                AuthScreen(
+                                    correctPin = prefs.appPin,
+                                    isBiometricEnabled = prefs.isBiometricEnabled,
+                                    onSuccess = {
+                                        // Обновляем таймер при успешном входе
+                                        prefs.backgroundTimestamp = System.currentTimeMillis()
+                                        navController.navigate("main") { popUpTo("auth") { inclusive = true } }
+                                    }
+                                )
+                            }
+
+                            composable("settings") {
+                                SettingsScreen(
+                                    onBackClick = { navController.popBackStack() },
+                                    onHomeClick = { navController.navigate("main") { popUpTo("main") { inclusive = false } } },
+                                    onSearchClick = { navController.navigate("search") { launchSingleTop = true } },
+                                    onAboutClick = { navController.navigate("about") }
+                                )
+                            }
+
+                            composable("about") {
+                                AboutAppScreen(
+                                    onBackClick = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable("search") {
+                                SearchScreen(
+                                    onBackClick = { navController.popBackStack() },
+                                    onHomeClick = { navController.navigate("main") { popUpTo("main") { inclusive = false } } },
+                                    onSettingsClick = { navController.navigate("settings") { launchSingleTop = true } },
+                                    onAddClick = { navController.navigate("add/0") },
+                                    onDocumentClick = { id -> navController.navigate("detail/$id") }
+                                )
+                            }
+
+                            composable("detail/{id}") { backStackEntry ->
+                                val idString = backStackEntry.arguments?.getString("id")
+                                val id = idString?.toIntOrNull() ?: 0
+                                DocumentDetailScreen(
+                                    documentId = id,
+                                    onBackClick = { navController.popBackStack() }
+                                )
+                            }
+
+                            composable("add/{profileId}") { backStackEntry ->
+                                val profileIdString = backStackEntry.arguments?.getString("profileId")
+                                val profileId = profileIdString?.toIntOrNull() ?: 0
+
+                                AddDocumentScreen(
+                                    profileId = profileId,
+                                    onBackClick = { navController.popBackStack() },
+                                    onSaved = { navController.popBackStack() }
+                                )
+                            }
                         }
 
-                        composable("main") {
-                            MainScreen(
-                                onDocumentClick = { id -> navController.navigate("detail/$id") },
-                                onAddClick = { folderId -> navController.navigate("add/$folderId") },
-                                onSettingsClick = { navController.navigate("settings") { launchSingleTop = true } },
-                                onSearchClick = { navController.navigate("search") { launchSingleTop = true } },
-                                viewModel = viewModel
-                            )
+                        // --- ОВЕРЛЕЙ ЭКСТРЕННОЙ БЛОКИРОВКИ ---
+                        // Если сработал тайм-аут, рисует AuthScreen поверх всей навигации
+                        if (isTimeoutLocked) {
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.background
+                            ) {
+                                AuthScreen(
+                                    correctPin = prefs.appPin,
+                                    isBiometricEnabled = prefs.isBiometricEnabled,
+                                    onSuccess = {
+                                        // Пользователь ввел пароль — снимается оверлей и обновляется таймер
+                                        isTimeoutLocked = false
+                                        prefs.backgroundTimestamp = System.currentTimeMillis()
+                                    }
+                                )
+                            }
                         }
 
-                        composable("auth") {
-                            AuthScreen(
-                                correctPin = prefs.appPin,
-                                isBiometricEnabled = prefs.isBiometricEnabled,
-                                onSuccess = {
-                                    navController.navigate("main") { popUpTo("auth") { inclusive = true } }
-                                }
-                            )
-                        }
-
-                        composable("settings") {
-                            SettingsScreen(
-                                onBackClick = { navController.popBackStack() },
-                                onHomeClick = { navController.navigate("main") { popUpTo("main") { inclusive = false } } },
-                                onSearchClick = { navController.navigate("search") { launchSingleTop = true } },
-                                onAboutClick = { navController.navigate("about") }
-                            )
-                        }
-
-                        composable("about") {
-                            AboutAppScreen(
-                                onBackClick = { navController.popBackStack() }
-                            )
-                        }
-
-                        composable("search") {
-                            SearchScreen(
-                                onBackClick = { navController.popBackStack() },
-                                onHomeClick = { navController.navigate("main") { popUpTo("main") { inclusive = false } } },
-                                onSettingsClick = { navController.navigate("settings") { launchSingleTop = true } },
-                                onAddClick = { navController.navigate("add/0") },
-                                onDocumentClick = { id -> navController.navigate("detail/$id") }
-                            )
-                        }
-
-                        composable("detail/{id}") { backStackEntry ->
-                            val idString = backStackEntry.arguments?.getString("id")
-                            val id = idString?.toIntOrNull() ?: 0
-                            DocumentDetailScreen(
-                                documentId = id,
-                                onBackClick = { navController.popBackStack() }
-                            )
-                        }
-
-                        composable("add/{profileId}") { backStackEntry ->
-                            val profileIdString = backStackEntry.arguments?.getString("profileId")
-                            val profileId = profileIdString?.toIntOrNull() ?: 0
-
-                            AddDocumentScreen(
-                                profileId = profileId,
-                                onBackClick = { navController.popBackStack() },
-                                onSaved = { navController.popBackStack() }
-                            )
-                        }
                     }
                 }
             }
@@ -270,7 +332,7 @@ fun MainScreen(
 
     Scaffold(
         containerColor = Color.Transparent,
-        // ИЗМЕНЕНИЕ 1: Переносим всю шапку в специальный слой topBar.
+        // ИЗМЕНЕНИЕ 1: Перенос шапки в специальный слой topBar.
         // Scaffold сам поднимет её поверх контента и динамически посчитает её высоту.
         topBar = {
             Surface(
@@ -406,6 +468,7 @@ fun WolfMascotWithBubble() {
         "Сейф заперт. Ключ я, пожалуй, закопаю.",
         "Р-р-р... Работает Jetpack Security!",
         "Кто хороший мальчик? Я\u00A0хороший мальчик!",
+        "Как дела? Дерижи хвост пистолетом!",
         "Пароли зашифрованы, хвост пистолетом!"
     )
 
@@ -542,7 +605,6 @@ fun DocumentCard(
         }
     }
 }
-
 @Composable
 fun CustomFloatingToolbar(
     activeTab: Int = 0, // 0 - Главная, 1 - Поиск, 2 - Настройки
@@ -563,7 +625,7 @@ fun CustomFloatingToolbar(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding() // меню всегда будет выше системной полоски
-            .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 24.dp), // Слегка уменьшен bottom, так как navigationBarsPadding добавит своего места
+            .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(gapBetweenIslands, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -624,7 +686,7 @@ fun CustomFloatingToolbar(
     }
 }
 
-// Компонент отдельной кнопки меню, который умеет плавно расширяться
+// Компонент отдельной кнопки меню (Текст убран, форма стала круглым бейджем)
 @Composable
 fun ToolbarNavItem(isSelected: Boolean, icon: ImageVector, label: String, onClick: () -> Unit, scale: Float) {
     val backgroundColor by animateColorAsState(
@@ -640,30 +702,19 @@ fun ToolbarNavItem(isSelected: Boolean, icon: ImageVector, label: String, onClic
         shape = CircleShape,
         color = backgroundColor,
         modifier = Modifier
-            .height(48.dp * scale)
-            .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessLow)) // МАГИЯ ПЛАВНОГО РАСШИРЕНИЯ ТУТ
+            .size(48.dp * scale) // Делаем фиксированный размер, чтобы фон был идеальным кругом
             .bounceClick(onClick)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = if (isSelected) 16.dp * scale else 12.dp * scale),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = label,
+                contentDescription = label, // label остался только для систем чтения с экрана
                 tint = contentColor,
                 modifier = Modifier.size(24.dp * scale)
             )
-            if (isSelected) {
-                Spacer(modifier = Modifier.width(8.dp * scale))
-                Text(
-                    text = label,
-                    fontWeight = FontWeight.Bold,
-                    color = contentColor,
-                    fontSize = 14.sp * scale
-                )
-            }
         }
     }
 }
