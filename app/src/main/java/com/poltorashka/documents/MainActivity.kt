@@ -3,64 +3,31 @@ package com.poltorashka.documents
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.biometric.BiometricPrompt
-import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -71,8 +38,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -80,24 +51,9 @@ import androidx.navigation.compose.rememberNavController
 import bounceClick
 import com.poltorashka.documents.data.AppDatabase
 import com.poltorashka.documents.ui.theme.DocumentsTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Calendar
-import androidx.compose.foundation.lazy.grid.items as gridItems
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.ui.zIndex
-import androidx.compose.runtime.DisposableEffect
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 
 fun getDynamicGreeting(): String {
     val hour = java.time.LocalTime.now().hour
@@ -109,18 +65,18 @@ fun getDynamicGreeting(): String {
     }
 }
 
-
 fun getGreetingIconResId(): Int {
     val calendar = Calendar.getInstance()
     return when (calendar.get(Calendar.HOUR_OF_DAY)) {
-        in 6..11 -> R.drawable.wolf1   // Утро
-        in 12..17 -> R.drawable.wolf2  // День
-        in 18..22 -> R.drawable.wolf3  // Вечер
-        else -> R.drawable.wolf4       // Ночь
+        in 6..11 -> R.drawable.wolf1
+        in 12..17 -> R.drawable.wolf2
+        in 18..22 -> R.drawable.wolf3
+        else -> R.drawable.wolf4
     }
 }
 
 class MainActivity : FragmentActivity() {
+    @OptIn(ExperimentalFoundationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -135,27 +91,27 @@ class MainActivity : FragmentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // --- ЛОГИКА ТАЙМАУТА БЛОКИРОВКИ ---
                     var isTimeoutLocked by remember { mutableStateOf(false) }
+                    var isFirstOnStart by remember { mutableStateOf(true) }
                     val lifecycleOwner = LocalLifecycleOwner.current
 
                     DisposableEffect(lifecycleOwner) {
                         val observer = LifecycleEventObserver { _, event ->
                             when (event) {
                                 Lifecycle.Event.ON_STOP -> {
-                                    // Приложение свернуто - засекается время
                                     prefs.backgroundTimestamp = System.currentTimeMillis()
                                 }
                                 Lifecycle.Event.ON_START -> {
-                                    // Приложение развернуто - проверяется время
-                                    val lastTime = prefs.backgroundTimestamp
-                                    if (lastTime > 0) {
-                                        val timePassed = System.currentTimeMillis() - lastTime
-                                        // 120_000 мс = 2 минуты
-                                        if (timePassed > 120_000 && (prefs.isPinEnabled || prefs.isBiometricEnabled)) {
-                                            isTimeoutLocked = true
+                                    if (!isFirstOnStart) {
+                                        val lastTime = prefs.backgroundTimestamp
+                                        if (lastTime > 0) {
+                                            val timePassed = System.currentTimeMillis() - lastTime
+                                            if (timePassed > 120_000 && (prefs.isPinEnabled || prefs.isBiometricEnabled)) {
+                                                isTimeoutLocked = true
+                                            }
                                         }
                                     }
+                                    isFirstOnStart = false
                                 }
                                 else -> {}
                             }
@@ -166,7 +122,6 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
-                    // База данных и ViewModel
                     val db = AppDatabase.getDatabase(context)
                     val viewModel: DocumentsViewModel = viewModel(
                         factory = DocumentsViewModelFactory(db.documentDao(), db.folderDao())
@@ -174,16 +129,12 @@ class MainActivity : FragmentActivity() {
 
                     val navController = rememberNavController()
                     val startScreen = if (!prefs.isOnboardingCompleted) "onboarding" else if (prefs.isPinEnabled) "auth" else "main"
-                    val tabRoutes = listOf("main", "settings", "search")
+                    val tabRoutes = listOf("main")
 
-                    // Навигация в Box, чтобы иметь возможность рисовать оверлей блокировки
                     Box(modifier = Modifier.fillMaxSize()) {
-
-                        // ОСНОВНАЯ НАВИГАЦИЯ
                         NavHost(
                             navController = navController,
                             startDestination = startScreen,
-
                             enterTransition = {
                                 if (initialState.destination.route in tabRoutes && targetState.destination.route in tabRoutes) {
                                     fadeIn(animationSpec = tween(300))
@@ -205,7 +156,6 @@ class MainActivity : FragmentActivity() {
                                 slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(400))
                             }
                         ) {
-
                             composable("onboarding") {
                                 OnboardingScreen(
                                     onFinish = {
@@ -217,50 +167,72 @@ class MainActivity : FragmentActivity() {
                             }
 
                             composable("main") {
-                                MainScreen(
-                                    onDocumentClick = { id -> navController.navigate("detail/$id") },
-                                    onAddClick = { folderId -> navController.navigate("add/$folderId") },
-                                    onSettingsClick = { navController.navigate("settings") { launchSingleTop = true } },
-                                    onSearchClick = { navController.navigate("search") { launchSingleTop = true } },
-                                    viewModel = viewModel
-                                )
+                                val pagerState = rememberPagerState(pageCount = { 3 })
+                                val coroutineScope = rememberCoroutineScope()
+
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    HorizontalPager(
+                                        state = pagerState,
+                                        modifier = Modifier.fillMaxSize(),
+                                        userScrollEnabled = true
+                                    ) { page ->
+                                        when (page) {
+                                            0 -> MainScreen(
+                                                onDocumentClick = { id -> navController.navigate("detail/$id") },
+                                                onAddClick = { folderId -> navController.navigate("add/$folderId") },
+                                                onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
+                                                onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                                                viewModel = viewModel
+                                            )
+                                            1 -> SearchScreen(
+                                                onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                                                onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                                                onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
+                                                onAddClick = { navController.navigate("add/0") },
+                                                onDocumentClick = { id -> navController.navigate("detail/$id") }
+                                            )
+                                            2 -> SettingsScreen(
+                                                onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                                                onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                                                onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                                                onAboutClick = { navController.navigate("about") }
+                                            )
+                                        }
+                                    }
+
+                                    Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                                        CustomFloatingToolbar(
+                                            activeTab = pagerState.currentPage,
+                                            onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                                            onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                                            onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
+                                            onAddClick = {
+                                                if (pagerState.currentPage == 0) {
+                                                    val activeFolderId = viewModel.selectedFolderId.value ?: viewModel.folders.value.firstOrNull()?.id
+                                                    activeFolderId?.let { navController.navigate("add/$it") }
+                                                } else {
+                                                    navController.navigate("add/0")
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
                             }
 
-                            // Холодный старт экран авторизации через навигацию
                             composable("auth") {
                                 AuthScreen(
                                     correctPin = prefs.appPin,
                                     isBiometricEnabled = prefs.isBiometricEnabled,
                                     onSuccess = {
-                                        // Обновляем таймер при успешном входе
                                         prefs.backgroundTimestamp = System.currentTimeMillis()
                                         navController.navigate("main") { popUpTo("auth") { inclusive = true } }
                                     }
                                 )
                             }
 
-                            composable("settings") {
-                                SettingsScreen(
-                                    onBackClick = { navController.popBackStack() },
-                                    onHomeClick = { navController.navigate("main") { popUpTo("main") { inclusive = false } } },
-                                    onSearchClick = { navController.navigate("search") { launchSingleTop = true } },
-                                    onAboutClick = { navController.navigate("about") }
-                                )
-                            }
-
                             composable("about") {
                                 AboutAppScreen(
                                     onBackClick = { navController.popBackStack() }
-                                )
-                            }
-
-                            composable("search") {
-                                SearchScreen(
-                                    onBackClick = { navController.popBackStack() },
-                                    onHomeClick = { navController.navigate("main") { popUpTo("main") { inclusive = false } } },
-                                    onSettingsClick = { navController.navigate("settings") { launchSingleTop = true } },
-                                    onAddClick = { navController.navigate("add/0") },
-                                    onDocumentClick = { id -> navController.navigate("detail/$id") }
                                 )
                             }
 
@@ -276,7 +248,6 @@ class MainActivity : FragmentActivity() {
                             composable("add/{profileId}") { backStackEntry ->
                                 val profileIdString = backStackEntry.arguments?.getString("profileId")
                                 val profileId = profileIdString?.toIntOrNull() ?: 0
-
                                 AddDocumentScreen(
                                     profileId = profileId,
                                     onBackClick = { navController.popBackStack() },
@@ -285,8 +256,6 @@ class MainActivity : FragmentActivity() {
                             }
                         }
 
-                        // --- ОВЕРЛЕЙ ЭКСТРЕННОЙ БЛОКИРОВКИ ---
-                        // Если сработал тайм-аут, рисует AuthScreen поверх всей навигации
                         if (isTimeoutLocked) {
                             Surface(
                                 modifier = Modifier.fillMaxSize(),
@@ -296,14 +265,12 @@ class MainActivity : FragmentActivity() {
                                     correctPin = prefs.appPin,
                                     isBiometricEnabled = prefs.isBiometricEnabled,
                                     onSuccess = {
-                                        // Пользователь ввел пароль — снимается оверлей и обновляется таймер
                                         isTimeoutLocked = false
                                         prefs.backgroundTimestamp = System.currentTimeMillis()
                                     }
                                 )
                             }
                         }
-
                     }
                 }
             }
@@ -332,8 +299,6 @@ fun MainScreen(
 
     Scaffold(
         containerColor = Color.Transparent,
-        // ИЗМЕНЕНИЕ 1: Перенос шапки в специальный слой topBar.
-        // Scaffold сам поднимет её поверх контента и динамически посчитает её высоту.
         topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -393,18 +358,8 @@ fun MainScreen(
                     }
                 }
             }
-        },
-        bottomBar = {
-            CustomFloatingToolbar(
-                activeTab = 0,
-                onHomeClick = { },
-                onSearchClick = onSearchClick,
-                onSettingsClick = onSettingsClick,
-                onAddClick = { activeFolderId?.let { onAddClick(it) } }
-            )
         }
     ) { innerPadding ->
-        // ОСНОВНОЙ БЛОК С КАРТОЧКАМИ ДОКУМЕНТОВ
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -446,7 +401,7 @@ fun MainScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
                         top = innerPadding.calculateTopPadding() + 16.dp,
-                        bottom = innerPadding.calculateBottomPadding() + 16.dp
+                        bottom = 120.dp // ИЗМЕНЕНИЕ: Отступ для парящей панели
                     )
                 ) {
                     gridItems(docs) { doc ->
@@ -458,7 +413,6 @@ fun MainScreen(
     }
 }
 
-// === НОВЫЙ КОМПОНЕНТ ДЛЯ ВОЛКА ===
 @Composable
 fun WolfMascotWithBubble() {
     val wolfPhrases = listOf(
@@ -477,7 +431,7 @@ fun WolfMascotWithBubble() {
 
     LaunchedEffect(showSpeechBubble) {
         if (showSpeechBubble) {
-            kotlinx.coroutines.delay(3500)
+            delay(3500)
             showSpeechBubble = false
         }
     }
@@ -500,17 +454,15 @@ fun WolfMascotWithBubble() {
         label = "wolfAlpha"
     )
 
-    // Контейнер Box, который Row видит как элемент размером 35dp
     Box(
         modifier = Modifier.size(35.dp),
-        contentAlignment = Alignment.BottomCenter // Облачко будет расти вверх от центра
+        contentAlignment = Alignment.BottomCenter
     ) {
-        // Сам маскот лежит в основе Box
         Image(
             painter = painterResource(id = getGreetingIconResId()),
             contentDescription = "Маскот",
             modifier = Modifier
-                .fillMaxSize() // Заполняет 35dp Box
+                .fillMaxSize()
                 .graphicsLayer(
                     scaleX = scale,
                     scaleY = scale,
@@ -518,13 +470,11 @@ fun WolfMascotWithBubble() {
                     transformOrigin = TransformOrigin.Center
                 )
                 .bounceClick {
-                    // При нажатии выбирает случайную фразу и показывает облачко
                     currentPhrase = wolfPhrases.random()
                     showSpeechBubble = true
                 }
         )
 
-        // Облачко
         AnimatedVisibility(
             visible = showSpeechBubble,
             enter = fadeIn(animationSpec = tween(400)),
@@ -577,8 +527,6 @@ fun DocumentCard(
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-
-            // Твоя текстура гильош
             Image(
                 painter = painterResource(id = R.drawable.pattern_guilloche),
                 contentDescription = null,
@@ -588,7 +536,6 @@ fun DocumentCard(
                 contentScale = ContentScale.Crop
             )
 
-            // --- СЛОЙ ТЕКСТА ---
             Text(
                 text = displayTitle,
                 fontWeight = FontWeight.SemiBold,
@@ -598,16 +545,16 @@ fun DocumentCard(
                     .align(Alignment.Center)
                     .padding(16.dp),
                 textAlign = TextAlign.Center,
-                // Защиту от слишком длинных названий в "Другом"
                 maxLines = 3,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
         }
     }
 }
+
 @Composable
 fun CustomFloatingToolbar(
-    activeTab: Int = 0, // 0 - Главная, 1 - Поиск, 2 - Настройки
+    activeTab: Int = 0,
     onHomeClick: () -> Unit,
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -620,52 +567,69 @@ fun CustomFloatingToolbar(
     val gapBetweenIslands = 12.dp * scale
     val innerPadding = 8.dp * scale
     val iconSpacing = 4.dp * scale
+    val itemSize = 48.dp * scale
+
+    val indicatorOffset by animateDpAsState(
+        targetValue = innerPadding + (activeTab * (itemSize.value + iconSpacing.value)).dp,
+        animationSpec = spring(
+            stiffness = Spring.StiffnessMediumLow,
+            dampingRatio = Spring.DampingRatioLowBouncy
+        ),
+        label = "indicatorOffset"
+    )
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding() // меню всегда будет выше системной полоски
+            .navigationBarsPadding()
             .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(gapBetweenIslands, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // ОСНОВНАЯ ПАНЕЛЬ НАВИГАЦИИ
         Surface(
             modifier = Modifier.height(panelHeight),
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surfaceVariant,
             shadowElevation = 4.dp
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = innerPadding),
-                horizontalArrangement = Arrangement.spacedBy(iconSpacing),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ToolbarNavItem(
-                    isSelected = activeTab == 0,
-                    icon = Icons.Filled.Home,
-                    label = "Главная",
-                    onClick = onHomeClick,
-                    scale = scale
+            Box(contentAlignment = Alignment.CenterStart) {
+                Box(
+                    modifier = Modifier
+                        .offset(x = indicatorOffset)
+                        .size(itemSize)
+                        .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
                 )
-                ToolbarNavItem(
-                    isSelected = activeTab == 1,
-                    icon = Icons.Filled.Search,
-                    label = "Поиск",
-                    onClick = onSearchClick,
-                    scale = scale
-                )
-                ToolbarNavItem(
-                    isSelected = activeTab == 2,
-                    icon = Icons.Filled.Settings,
-                    label = "Настройки",
-                    onClick = onSettingsClick,
-                    scale = scale
-                )
+
+                Row(
+                    modifier = Modifier.padding(horizontal = innerPadding),
+                    horizontalArrangement = Arrangement.spacedBy(iconSpacing),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ToolbarNavItem(
+                        isSelected = activeTab == 0,
+                        icon = Icons.Filled.Home,
+                        label = "Главная",
+                        onClick = onHomeClick,
+                        scale = scale
+                    )
+                    ToolbarNavItem(
+                        isSelected = activeTab == 1,
+                        icon = Icons.Filled.Search,
+                        label = "Поиск",
+                        onClick = onSearchClick,
+                        scale = scale
+                    )
+                    ToolbarNavItem(
+                        isSelected = activeTab == 2,
+                        icon = Icons.Filled.Settings,
+                        label = "Настройки",
+                        onClick = onSettingsClick,
+                        scale = scale
+                    )
+                }
             }
         }
 
-        // КНОПКА "+"
         Surface(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.primaryContainer,
@@ -686,47 +650,33 @@ fun CustomFloatingToolbar(
     }
 }
 
-// Компонент отдельной кнопки меню (Текст убран, форма стала круглым бейджем)
 @Composable
 fun ToolbarNavItem(isSelected: Boolean, icon: ImageVector, label: String, onClick: () -> Unit, scale: Float) {
-    val backgroundColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-        label = "bgColor"
-    )
     val contentColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
         label = "contentColor"
     )
 
-    Surface(
-        shape = CircleShape,
-        color = backgroundColor,
+    Box(
         modifier = Modifier
-            .size(48.dp * scale) // Делаем фиксированный размер, чтобы фон был идеальным кругом
-            .bounceClick(onClick)
+            .size(48.dp * scale)
+            .clip(CircleShape)
+            .bounceClick(onClick),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label, // label остался только для систем чтения с экрана
-                tint = contentColor,
-                modifier = Modifier.size(24.dp * scale)
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = contentColor,
+            modifier = Modifier.size(24.dp * scale)
+        )
     }
 }
-
-// ---------------------------------------------------------------------------
-// НОВЫЕ КОМПОНЕНТЫ PIN-КОДА (Они вынесены сюда, чтобы Настройки тоже могли их использовать)
-// ---------------------------------------------------------------------------
 
 @Composable
 fun PinDots(pinLength: Int, isError: Boolean) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(20.dp), // Чуть раздвинули точки
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(vertical = 16.dp)
     ) {
@@ -738,7 +688,7 @@ fun PinDots(pinLength: Int, isError: Boolean) {
 
             Box(
                 modifier = Modifier
-                    .size(20.dp) // Точки чуть-чуть аккуратнее
+                    .size(20.dp)
                     .background(color, CircleShape)
             )
         }
@@ -759,7 +709,6 @@ fun CustomNumpad(
         listOf("bio", "0", "⌫")
     )
 
-    // Единый размер для всех кнопок (УВЕЛИЧЕНО)
     val buttonSize = 84.dp
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -768,7 +717,6 @@ fun CustomNumpad(
                 row.forEach { key ->
                     if (key == "bio") {
                         if (isBiometricEnabled) {
-                            // Кнопка биометрии
                             Surface(
                                 shape = CircleShape,
                                 color = Color.Transparent,
@@ -786,7 +734,6 @@ fun CustomNumpad(
                                 }
                             }
                         } else {
-                            // Распорка теперь тоже размера buttonSize
                             Spacer(modifier = Modifier.size(buttonSize))
                         }
                     } else if (key == "⌫") {
@@ -812,7 +759,7 @@ fun CustomNumpad(
                             Box(contentAlignment = Alignment.Center) {
                                 Text(
                                     text = key,
-                                    fontSize = 36.sp, // Увеличили шрифт цифр
+                                    fontSize = 36.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
@@ -824,10 +771,6 @@ fun CustomNumpad(
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// ЭКРАН АВТОРИЗАЦИИ
-// ---------------------------------------------------------------------------
 
 @Composable
 fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () -> Unit) {
@@ -845,7 +788,7 @@ fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () ->
 
     LaunchedEffect(isError) {
         if (isError) {
-            kotlinx.coroutines.delay(500)
+            delay(500)
             pinInput = ""
             isError = false
         }
@@ -855,15 +798,14 @@ fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .systemBarsPadding() // МАГИЯ 1: Убирает черные системные полосы!
+                .systemBarsPadding()
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // МАГИЯ 2: Гибкая распорка, которая толкает заголовок чуть ниже центра
             Spacer(modifier = Modifier.weight(0.3f))
 
             Icon(
-                imageVector = Icons.Filled.Lock, // Заменил шестеренку на замок, так логичнее для экрана входа
+                imageVector = Icons.Filled.Lock,
                 contentDescription = null,
                 modifier = Modifier.size(56.dp),
                 tint = MaterialTheme.colorScheme.primary
@@ -880,7 +822,6 @@ fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () ->
             Spacer(modifier = Modifier.height(16.dp))
             PinDots(pinLength = pinInput.length, isError = isError)
 
-            // МАГИЯ 3: Главная распорка. Она забирает всё свободное место и толкает клавиатуру вниз!
             Spacer(modifier = Modifier.weight(1f))
 
             CustomNumpad(
@@ -898,7 +839,6 @@ fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () ->
                 onBackspaceClick = { if (pinInput.isNotEmpty() && !isError) pinInput = pinInput.dropLast(1) }
             )
 
-            // Небольшой отступ снизу, чтобы кнопки не прилипали к самому краю экрана
             Spacer(modifier = Modifier.height(48.dp))
         }
     }
@@ -912,7 +852,7 @@ fun showBiometricPrompt(activity: FragmentActivity, onSuccess: () -> Unit) {
         object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 super.onAuthenticationSucceeded(result)
-                onSuccess() // Если отпечаток совпал — пускает в приложение!
+                onSuccess()
             }
         }
     )

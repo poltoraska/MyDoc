@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -194,15 +195,6 @@ fun SettingsScreen(
                     }
                 }
             }
-        },
-        bottomBar = {
-            CustomFloatingToolbar(
-                activeTab = 2,
-                onHomeClick = onHomeClick,
-                onSearchClick = onSearchClick,
-                onSettingsClick = { },
-                onAddClick = { showAddDialog = true }
-            )
         }
     ) { innerPadding ->
         Column(
@@ -210,8 +202,12 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
                 .verticalScroll(screenScrollState)
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures { _, _ -> revealedFolderId = null }
+                // ИСПРАВЛЕНИЕ: Теперь мы слушаем только чистые тапы, а свайпы пропускаем дальше!
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null // убирает визуальный эффект пульсации при клике на пустоту
+                ) {
+                    revealedFolderId = null
                 },
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {

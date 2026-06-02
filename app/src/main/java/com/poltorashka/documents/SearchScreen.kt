@@ -149,16 +149,8 @@ fun SearchScreen(
                     )
                 }
             }
-        },
-        bottomBar = {
-            CustomFloatingToolbar(
-                activeTab = 1,
-                onHomeClick = onHomeClick,
-                onSearchClick = { },
-                onSettingsClick = onSettingsClick,
-                onAddClick = onAddClick
-            )
         }
+
     ) { innerPadding ->
         // --- РЕЗУЛЬТАТЫ ПОИСКА ---
         Column(
@@ -204,7 +196,7 @@ fun SearchScreen(
                     // ИЗМЕНЕНИЕ 4: Динамические отступы переданы прямо внутрь скроллящейся сетки
                     contentPadding = PaddingValues(
                         top = innerPadding.calculateTopPadding() + 16.dp,
-                        bottom = innerPadding.calculateBottomPadding() + 16.dp
+                        bottom = innerPadding.calculateBottomPadding() + 120.dp
                     )
                 ) {
                     items(filteredDocs) { doc ->
