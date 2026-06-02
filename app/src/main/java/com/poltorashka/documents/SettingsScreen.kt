@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -68,6 +69,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import bounceClick
@@ -115,7 +118,6 @@ fun SettingsScreen(
 
     val screenScrollState = rememberScrollState()
 
-    // --- ЛОГИКА РЕЗЕРВНОГО КОПИРОВАНИЯ ---
     var showBackupDialog by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
     var backupPasswordTemp by remember { mutableStateOf("") }
@@ -132,18 +134,17 @@ fun SettingsScreen(
                 } else {
                     android.widget.Toast.makeText(context, "Ошибка создания копии", android.widget.Toast.LENGTH_LONG).show()
                 }
-                backupPasswordTemp = "" // Очищает пароль из памяти
+                backupPasswordTemp = ""
             }
         }
     }
 
-    // Лаунчер для выбора файла
     val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
             selectedRestoreUri = uri
-            showRestoreDialog = true // Запрашивает пароль после выбора файла
+            showRestoreDialog = true
         }
     }
 
@@ -202,12 +203,8 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
                 .verticalScroll(screenScrollState)
-                // ИСПРАВЛЕНИЕ: Теперь мы слушаем только чистые тапы, а свайпы пропускаем дальше!
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null // убирает визуальный эффект пульсации при клике на пустоту
-                ) {
-                    revealedFolderId = null
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { revealedFolderId = null })
                 },
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
@@ -242,8 +239,6 @@ fun SettingsScreen(
                             modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Filled.Check, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
                             Text("Сохранить", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -374,13 +369,14 @@ fun SettingsScreen(
                             checked = isPinEnabledState,
                             onCheckedChange = { isChecked ->
                                 if (isChecked) {
+                                    isPinEnabledState = true
                                     showPinSetupDialog = true
                                 } else {
+                                    isPinEnabledState = false
                                     prefs.isPinEnabled = false
                                     prefs.appPin = ""
-                                    isPinEnabledState = false
-                                    prefs.isBiometricEnabled = false
                                     isBiometricEnabledState = false
+                                    prefs.isBiometricEnabled = false
                                 }
                             }
                         )
@@ -427,7 +423,6 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        // Кнопка создать
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.primary,
@@ -443,7 +438,6 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.width(12.dp))
 
-                        // Кнопка восстановить
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.secondaryContainer,
@@ -470,7 +464,6 @@ fun SettingsScreen(
                     Text("Оформление", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Переключатель темы (Три кнопки в ряд)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -486,7 +479,6 @@ fun SettingsScreen(
                                     .bounceClick {
                                         themeModeState = index
                                         prefs.themeMode = index
-                                        // Мгновенно пересоздает активити для применения темы
                                         (context as? android.app.Activity)?.recreate()
                                     }
                             ) {
@@ -502,7 +494,6 @@ fun SettingsScreen(
                         }
                     }
 
-                    // Тумблер динамических цветов (показывается только на Android 12 и выше)
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Row(
@@ -525,7 +516,6 @@ fun SettingsScreen(
                                 onCheckedChange = {
                                     isDynamicColorState = it
                                     prefs.useDynamicColor = it
-                                    // Мгновенно пересоздает активити для смены палитры
                                     (context as? android.app.Activity)?.recreate()
                                 }
                             )
@@ -534,14 +524,11 @@ fun SettingsScreen(
                 }
             }
 
-            // Отступ снизу для панели навигации
             Spacer(modifier = Modifier.height(80.dp + innerPadding.calculateBottomPadding()))
         }
     }
 
     // --- ДИАЛОГИ РЕЗЕРВНОГО КОПИРОВАНИЯ ---
-
-    // Диалог задания пароля для создания копии
     if (showBackupDialog) {
         var passwordInput by remember { mutableStateOf("") }
         AlertDialog(
@@ -567,7 +554,6 @@ fun SettingsScreen(
                     if (passwordInput.isNotBlank()) {
                         backupPasswordTemp = passwordInput
                         showBackupDialog = false
-                        // Вызывает системное окно сохранения файла
                         exportLauncher.launch("MyDoc_Backup.zip")
                     }
                 }) { Text("Далее") }
@@ -578,7 +564,6 @@ fun SettingsScreen(
         )
     }
 
-    // Диалог ввода пароля для восстановления
     if (showRestoreDialog) {
         var restorePasswordInput by remember { mutableStateOf("") }
         AlertDialog(
@@ -605,7 +590,6 @@ fun SettingsScreen(
                         showRestoreDialog = false
                         android.widget.Toast.makeText(context, "Восстановление...", android.widget.Toast.LENGTH_SHORT).show()
 
-                        // Важное ИЗМЕНЕНИЕ: Закрывает коннект Room, освобождая файлы на диске
                         try {
                             com.poltorashka.documents.data.AppDatabase.getDatabase(context).close()
                         } catch (e: Exception) {
@@ -616,7 +600,6 @@ fun SettingsScreen(
                             if (success) {
                                 android.widget.Toast.makeText(context, "Данные восстановлены успешно!", android.widget.Toast.LENGTH_LONG).show()
 
-                                // Даёт микропаузу, чтобы тост успел показаться, и жестко перезапускает процесс
                                 kotlin.concurrent.thread {
                                     Thread.sleep(1500)
                                     Runtime.getRuntime().exit(0)
@@ -635,101 +618,104 @@ fun SettingsScreen(
         )
     }
 
-    // ПОЛНОЭКРАННОЕ СОЗДАНИЕ PIN-КОДА
+    // --- ПОЛНОЭКРАННОЕ СОЗДАНИЕ PIN-КОДА (ЧЕРЕЗ DIALOG) ---
     if (showPinSetupDialog) {
-        var pinInput by remember { mutableStateOf("") }
-        var isConfirmMode by remember { mutableStateOf(false) }
-        var firstPin by remember { mutableStateOf("") }
-        var isError by remember { mutableStateOf(false) }
-
-        LaunchedEffect(isError) {
-            if (isError) {
-                delay(500)
-                pinInput = ""
-                isError = false
-            }
-        }
-
-        androidx.activity.compose.BackHandler {
-            showPinSetupDialog = false
-            isPinEnabledState = false
-        }
-
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
+        Dialog(
+            onDismissRequest = {
+                showPinSetupDialog = false
+                isPinEnabledState = false // Если нажали системную кнопку "Назад", откатываем тумблер
+            },
+            properties = DialogProperties(usePlatformDefaultWidth = false) // Растягивает диалог на весь экран
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .systemBarsPadding()
-                    .padding(horizontal = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            var pinInput by remember { mutableStateOf("") }
+            var isConfirmMode by remember { mutableStateOf(false) }
+            var firstPin by remember { mutableStateOf("") }
+            var isError by remember { mutableStateOf(false) }
+
+            LaunchedEffect(isError) {
+                if (isError) {
+                    delay(500)
+                    pinInput = ""
+                    isConfirmMode = false
+                    isError = false
+                }
+            }
+
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background
             ) {
-                Spacer(modifier = Modifier.weight(0.3f))
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .systemBarsPadding()
+                        .padding(horizontal = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Spacer(modifier = Modifier.weight(0.3f))
 
-                Icon(
-                    imageVector = Icons.Filled.Lock,
-                    contentDescription = null,
-                    modifier = Modifier.size(56.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(24.dp))
+                    Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = null,
+                        modifier = Modifier.size(56.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                Text(
-                    text = if (isError) "PIN-коды не совпадают"
-                    else if (isConfirmMode) "Повторите PIN-код"
-                    else "Создайте PIN-код",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground
-                )
+                    Text(
+                        text = if (isError) "PIN-коды не совпадают"
+                        else if (isConfirmMode) "Повторите PIN-код"
+                        else "Создайте PIN-код",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground
+                    )
 
-                Spacer(modifier = Modifier.height(16.dp))
-                PinDots(pinLength = pinInput.length, isError = isError)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    PinDots(pinLength = pinInput.length, isError = isError)
 
-                Spacer(modifier = Modifier.weight(1f))
+                    Spacer(modifier = Modifier.weight(1f))
 
-                CustomNumpad(
-                    isBiometricEnabled = false,
-                    onBiometricClick = {},
-                    onNumberClick = { digit ->
-                        if (pinInput.length < 4 && !isError) {
-                            pinInput += digit
-                            if (pinInput.length == 4) {
-                                if (!isConfirmMode) {
-                                    firstPin = pinInput
-                                    pinInput = ""
-                                    isConfirmMode = true
-                                } else {
-                                    if (pinInput == firstPin) {
-                                        prefs.appPin = pinInput
-                                        prefs.isPinEnabled = true
-                                        isPinEnabledState = true
-                                        showPinSetupDialog = false
+                    CustomNumpad(
+                        isBiometricEnabled = false,
+                        onBiometricClick = {},
+                        onNumberClick = { digit ->
+                            if (pinInput.length < 4 && !isError) {
+                                pinInput += digit
+                                if (pinInput.length == 4) {
+                                    if (!isConfirmMode) {
+                                        firstPin = pinInput
+                                        pinInput = ""
+                                        isConfirmMode = true
                                     } else {
-                                        isError = true
-                                        isConfirmMode = false
+                                        if (pinInput == firstPin) {
+                                            prefs.appPin = pinInput
+                                            prefs.isPinEnabled = true
+                                            isPinEnabledState = true
+                                            showPinSetupDialog = false
+                                        } else {
+                                            isError = true
+                                        }
                                     }
                                 }
                             }
+                        },
+                        onBackspaceClick = {
+                            if (pinInput.isNotEmpty() && !isError) pinInput = pinInput.dropLast(1)
                         }
-                    },
-                    onBackspaceClick = {
-                        if (pinInput.isNotEmpty() && !isError) pinInput = pinInput.dropLast(1)
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    TextButton(
+                        onClick = {
+                            showPinSetupDialog = false
+                            isPinEnabledState = false // Откатываем тумблер, если передумали создавать ПИН
+                        },
+                        modifier = Modifier.padding(bottom = 24.dp)
+                    ) {
+                        Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
                     }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                TextButton(
-                    onClick = {
-                        showPinSetupDialog = false
-                        isPinEnabledState = false
-                    },
-                    modifier = Modifier.padding(bottom = 24.dp)
-                ) {
-                    Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
                 }
             }
         }
