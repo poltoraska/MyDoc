@@ -21,3 +21,14 @@
 #-renamesourcefileattribute SourceFile
 
 -dontwarn com.google.errorprone.annotations.**
+
+-keepattributes Signature
+
+-keep class com.google.gson.reflect.TypeToken { *; }
+-keep class * extends com.google.gson.reflect.TypeToken
+
+-keep class com.poltorashka.documents.data.DocumentEntity { *; }
+-keep class com.poltorashka.documents.data.FolderEntity { *; }
+-keep class com.poltorashka.documents.data.Converters { *; }
+
+-keepattributes *Annotation*
