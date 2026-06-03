@@ -9,7 +9,8 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DocumentDao {
-    @Query("SELECT * FROM documents")
+    // ИЗМЕНЕНИЕ: Добавлена сортировка ORDER BY orderIndex ASC
+    @Query("SELECT * FROM documents ORDER BY orderIndex ASC")
     fun getAllDocuments(): Flow<List<DocumentEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -21,9 +22,13 @@ interface DocumentDao {
     @Query("DELETE FROM documents WHERE id = :documentId")
     suspend fun deleteDocument(documentId: Int)
 
-    // НОВОЕ: Универсальное обновление всего документа
+    // Универсальное обновление всего документа
     @Update
     suspend fun updateDocument(document: DocumentEntity)
+
+    // НОВОЕ: Массовое обновление списка документов (нужно для сохранения порядка)
+    @Update
+    suspend fun updateDocuments(documents: List<DocumentEntity>)
 
     @Query("DELETE FROM documents WHERE profileId = :profileId")
     suspend fun deleteDocumentsByProfileId(profileId: Int)

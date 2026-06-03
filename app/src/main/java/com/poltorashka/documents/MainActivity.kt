@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -54,6 +55,10 @@ import com.poltorashka.documents.ui.theme.DocumentsTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import androidx.compose.runtime.toMutableStateList
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import com.poltorashka.documents.data.ReorderScreen
 
 fun getDynamicGreeting(): String {
     val hour = java.time.LocalTime.now().hour
@@ -182,6 +187,7 @@ class MainActivity : FragmentActivity() {
                                                 onAddClick = { folderId -> navController.navigate("add/$folderId") },
                                                 onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
                                                 onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                                                onReorderClick = { navController.navigate("reorder") },
                                                 viewModel = viewModel
                                             )
                                             1 -> SearchScreen(
@@ -236,6 +242,13 @@ class MainActivity : FragmentActivity() {
                                 )
                             }
 
+                            composable("reorder") {
+                                ReorderScreen(
+                                    onBackClick = { navController.popBackStack() },
+                                    viewModel = viewModel
+                                )
+                            }
+
                             composable("detail/{id}") { backStackEntry ->
                                 val idString = backStackEntry.arguments?.getString("id")
                                 val id = idString?.toIntOrNull() ?: 0
@@ -285,6 +298,7 @@ fun MainScreen(
     onAddClick: (Int) -> Unit,
     onSettingsClick: () -> Unit,
     onSearchClick: () -> Unit,
+    onReorderClick: () -> Unit, // <--- НОВЫЙ ПАРАМЕТР ДЛЯ КНОПКИ
     viewModel: DocumentsViewModel
 ) {
     val folders by viewModel.folders.collectAsState()
@@ -311,23 +325,51 @@ fun MainScreen(
                         .fillMaxWidth()
                         .padding(top = 80.dp, bottom = 24.dp)
                 ) {
-                    Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-                        Text(
-                            text = "Мои документы",
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Размещаем заголовок и кнопку на одной линии
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Column {
                             Text(
-                                text = "${getDynamicGreeting()} ${if (userName.isNotEmpty()) "$userName!" else "!"}",
-                                fontSize = 18.sp,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                                text = "Мои документы",
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            WolfMascotWithBubble()
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "${getDynamicGreeting()} ${if (userName.isNotEmpty()) "$userName!" else "!"}",
+                                    fontSize = 18.sp,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                WolfMascotWithBubble()
+                            }
+                        }
+
+                        // КНОПКА "ИЗМЕНИТЬ ПОРЯДОК" (Карандашик)
+                        if (!isLoading && folders.isNotEmpty() && docs.isNotEmpty()) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .bounceClick { onReorderClick() }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Edit,
+                                        contentDescription = "Изменить порядок",
+                                        tint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -401,10 +443,10 @@ fun MainScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
                         top = innerPadding.calculateTopPadding() + 16.dp,
-                        bottom = 120.dp // ИЗМЕНЕНИЕ: Отступ для парящей панели
+                        bottom = 120.dp
                     )
                 ) {
-                    gridItems(docs) { doc ->
+                    gridItems(docs, key = { it.id }) { doc ->
                         DocumentCard(document = doc, onClick = { onDocumentClick(doc.id) })
                     }
                 }

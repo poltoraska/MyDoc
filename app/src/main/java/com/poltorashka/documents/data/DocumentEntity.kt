@@ -1,5 +1,6 @@
 package com.poltorashka.documents.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverter
@@ -13,7 +14,11 @@ data class DocumentEntity(
     val profileId: Int,
     val documentType: String,
     val photoUris: List<String> = emptyList(), // ТЕПЕРЬ ЭТО СПИСОК (по умолчанию пустой)
-    val fieldsData: Map<String, String>
+    val fieldsData: Map<String, String>,
+
+    // НОВОЕ ПОЛЕ ДЛЯ ПОРЯДКА (По умолчанию 0 для старых документов)
+    @ColumnInfo(defaultValue = "0")
+    val orderIndex: Int = 0
 )
 
 class Converters {

@@ -7,6 +7,7 @@ import com.poltorashka.documents.data.DocumentDao
 import com.poltorashka.documents.data.DocumentEntity
 import com.poltorashka.documents.data.FolderDao
 import com.poltorashka.documents.data.FolderEntity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,52 +21,52 @@ class DocumentsViewModel(
     private val folderDao: FolderDao
 ) : ViewModel() {
 
-    // --- НОВЫЙ БЛОК: СОСТОЯНИЕ ЗАГРУЗКИ ---
-    // Изначально true, чтобы сразу показать красивый лоадер при запуске
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     init {
         viewModelScope.launch {
-            // Ждет, пока SQLCipher инициализируется и база вернет первый ответ.
-            // Как только это произойдет (даже если список пуст) — выключает загрузку.
             folderDao.getAllFolders().collect {
                 _isLoading.value = false
             }
         }
     }
-    // --------------------------------------
 
-    // Получает все папки из БД
     val folders: StateFlow<List<FolderEntity>> = folderDao.getAllFolders()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Отдает все документы без фильтрации по папкам для экрана поиска
     val allDocuments: StateFlow<List<DocumentEntity>> = documentDao.getAllDocuments()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Хранит ID выбранной папки
     private val _selectedFolderId = MutableStateFlow<Int?>(null)
     val selectedFolderId: StateFlow<Int?> = _selectedFolderId
 
-    // Фильтрует документы
     val documents: StateFlow<List<DocumentEntity>> = combine(
         documentDao.getAllDocuments(),
         _selectedFolderId,
         folders
     ) { allDocs, currentFolderId, allFolders ->
-        // Если папка не выбрана вручную, берет первую из списка. Если папок нет — null
         val activeFolderId = currentFolderId ?: allFolders.firstOrNull()?.id
 
         if (activeFolderId != null) {
             allDocs.filter { it.profileId == activeFolderId }
         } else {
-            emptyList() // Если папок нет, документов тоже нет
+            emptyList()
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun selectFolder(folderId: Int) {
         _selectedFolderId.value = folderId
+    }
+
+    // --- Логика обновления порядка после перетаскивания (Drag & Drop) ---
+    fun updateDocumentsOrder(reorderedDocs: List<DocumentEntity>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updatedList = reorderedDocs.mapIndexed { index, doc ->
+                doc.copy(orderIndex = index) // Присваиваивает новый порядковый номер
+            }
+            documentDao.updateDocuments(updatedList)
+        }
     }
 }
 

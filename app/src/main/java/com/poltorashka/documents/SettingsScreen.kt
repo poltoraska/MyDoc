@@ -77,6 +77,8 @@ import bounceClick
 import com.poltorashka.documents.data.AppDatabase
 import com.poltorashka.documents.data.FolderEntity
 import kotlinx.coroutines.delay
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,6 +124,8 @@ fun SettingsScreen(
     var showRestoreDialog by remember { mutableStateOf(false) }
     var backupPasswordTemp by remember { mutableStateOf("") }
     var selectedRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    val haptics = LocalHapticFeedback.current
 
     val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")
@@ -284,6 +288,9 @@ fun SettingsScreen(
                                             draggingIndex = item.index
                                             draggingItemOffset = 0f
                                             revealedFolderId = null
+
+                                            // ВИБРАЦИЯ 1: При долгом нажатии и захвате папки
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                         }
                                     },
                                     onDrag = { change, dragAmount ->
@@ -299,6 +306,10 @@ fun SettingsScreen(
                                             localFolders[nextIndex] = temp
                                             draggingIndex = nextIndex
                                             draggingItemOffset -= itemHeightPx
+
+                                            // ВИБРАЦИЯ 2: При перескакивании папки вниз
+                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+
                                         } else if (draggingItemOffset < -threshold && currentIndex > 0) {
                                             val prevIndex = currentIndex - 1
                                             val temp = localFolders[currentIndex]
@@ -306,6 +317,9 @@ fun SettingsScreen(
                                             localFolders[prevIndex] = temp
                                             draggingIndex = prevIndex
                                             draggingItemOffset += itemHeightPx
+
+                                            // ВИБРАЦИЯ 2: При перескакивании папки вверх
+                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         }
                                     },
                                     onDragEnd = {
