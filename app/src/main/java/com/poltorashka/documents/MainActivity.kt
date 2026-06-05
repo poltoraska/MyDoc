@@ -824,6 +824,7 @@ fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () ->
 
     LaunchedEffect(Unit) {
         if (isBiometricEnabled && activity != null) {
+            delay(300)
             showBiometricPrompt(activity, onSuccess)
         }
     }
