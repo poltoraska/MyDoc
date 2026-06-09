@@ -82,9 +82,7 @@ fun SearchScreen(
     }
 
     Scaffold(
-        // ИЗМЕНЕНИЕ 1: Прозрачный фон для всего Scaffold
         containerColor = Color.Transparent,
-        // ИЗМЕНЕНИЕ 2: Перенос шапки в topBar
         topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -157,7 +155,6 @@ fun SearchScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
-            // ИЗМЕНЕНИЕ 3: Убраны жесткие отступы и background
         ) {
             if (searchQuery.isBlank()) {
                 Column(

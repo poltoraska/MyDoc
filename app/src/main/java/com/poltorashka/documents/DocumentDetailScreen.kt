@@ -63,8 +63,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import bounceClick
@@ -98,12 +96,17 @@ private fun saveEncryptedFile(context: Context, uri: Uri): String? {
     }
 }
 
-private fun openPdfFile(context: Context, path: String) {
+// УНИВЕРСАЛЬНАЯ ФУНКЦИЯ ДЛЯ ОТКРЫТИЯ ФАЙЛОВ ЛЮБОГО ТИПА СИСТЕМОЙ
+private fun openFileExternally(context: Context, path: String) {
     try {
+        val isPdf = path.endsWith(".pdf", ignoreCase = true)
+        val extension = if (isPdf) "pdf" else "jpg"
+        val mimeType = if (isPdf) "application/pdf" else "image/jpeg"
+
         val encryptedFile = File(path)
         val decryptedBytes = FileSecurity.decryptFile(context, encryptedFile)
 
-        val tempFile = File(context.cacheDir, "temp_preview.pdf")
+        val tempFile = File(context.cacheDir, "temp_preview.$extension")
         tempFile.writeBytes(decryptedBytes)
 
         val uri = FileProvider.getUriForFile(
@@ -113,14 +116,14 @@ private fun openPdfFile(context: Context, path: String) {
         )
 
         val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/pdf")
+            setDataAndType(uri, mimeType)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
         context.startActivity(intent)
 
     } catch (e: Exception) {
-        Toast.makeText(context, "Ошибка при открытии PDF: ${e.message}", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, "Ошибка при открытии файла: ${e.message}", Toast.LENGTH_LONG).show()
     }
 }
 
@@ -186,7 +189,6 @@ fun DocumentDetailScreen(
     val document by viewModel.document.collectAsState()
     val context = LocalContext.current
 
-    var imageToShow by remember { mutableStateOf<String?>(null) }
     var imageToDelete by remember { mutableStateOf<String?>(null) }
 
     var isEditing by remember { mutableStateOf(false) }
@@ -208,11 +210,12 @@ fun DocumentDetailScreen(
         }
     }
 
+    // ТЕПЕРЬ МОЖНО ВЫБРАТЬ ТОЛЬКО 1 ФАЙЛ
     val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris ->
-        document?.let { doc ->
-            uris.forEach { uri ->
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            document?.let { doc ->
                 val savedPath = saveEncryptedFile(context, uri)
                 if (savedPath != null) {
                     viewModel.addPhoto(doc, savedPath)
@@ -257,34 +260,8 @@ fun DocumentDetailScreen(
         )
     }
 
-    if (imageToShow != null) {
-        Dialog(
-            onDismissRequest = { imageToShow = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black).clickable { imageToShow = null }) {
-                DecryptedAsyncImage(
-                    path = imageToShow!!,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
-                )
-                Surface(
-                    shape = CircleShape,
-                    color = Color.Black.copy(alpha = 0.5f),
-                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).size(48.dp).bounceClick { imageToShow = null }
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White)
-                    }
-                }
-            }
-        }
-    }
-
     Scaffold(
-        // Фон для всего экрана здесь
         containerColor = MaterialTheme.colorScheme.background,
-        // Перенос шапки в слот topBar
         topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -420,7 +397,6 @@ fun DocumentDetailScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
-                    // Контент теперь скроллится на весь экран
                     .verticalScroll(rememberScrollState())
             ) {
                 Spacer(modifier = Modifier.height(innerPadding.calculateTopPadding() + 24.dp))
@@ -508,11 +484,8 @@ fun DocumentDetailScreen(
                                 path = path,
                                 onDelete = { imageToDelete = path },
                                 onOpen = {
-                                    if (path.endsWith(".pdf", ignoreCase = true)) {
-                                        openPdfFile(context, path)
-                                    } else {
-                                        imageToShow = path
-                                    }
+                                    // ТЕПЕРЬ И ПДФ И КАРТИНКИ ОТКРЫВАЮТСЯ СИСТЕМОЙ ОДИНАКОВО
+                                    openFileExternally(context, path)
                                 }
                             )
                         }
@@ -524,7 +497,6 @@ fun DocumentDetailScreen(
     }
 }
 
-// КОМПОНЕНТ ДЛЯ КАРТОЧКИ ФАЙЛА С КРЕСТИКОМ ПОВЕРХ ВСЕГО
 @Composable
 fun FileItem(path: String, onDelete: () -> Unit, onOpen: () -> Unit) {
     val isPdf = path.endsWith(".pdf", ignoreCase = true)

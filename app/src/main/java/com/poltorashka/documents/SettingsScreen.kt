@@ -3,12 +3,12 @@ package com.poltorashka.documents
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,7 +33,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
@@ -66,6 +65,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -169,12 +169,20 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text(
-                            text = "Настройки",
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Настройки",
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Image(
+                                painter = painterResource(id = R.drawable.settings),
+                                contentDescription = "Иконка настроек",
+                                modifier = Modifier.size(30.dp)
+                            )
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Управление приложением",
@@ -289,7 +297,6 @@ fun SettingsScreen(
                                             draggingItemOffset = 0f
                                             revealedFolderId = null
 
-                                            // ВИБРАЦИЯ 1: При долгом нажатии и захвате папки
                                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                         }
                                     },
@@ -307,7 +314,6 @@ fun SettingsScreen(
                                             draggingIndex = nextIndex
                                             draggingItemOffset -= itemHeightPx
 
-                                            // ВИБРАЦИЯ 2: При перескакивании папки вниз
                                             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
 
                                         } else if (draggingItemOffset < -threshold && currentIndex > 0) {
@@ -318,7 +324,6 @@ fun SettingsScreen(
                                             draggingIndex = prevIndex
                                             draggingItemOffset += itemHeightPx
 
-                                            // ВИБРАЦИЯ 2: При перескакивании папки вверх
                                             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         }
                                     },

@@ -298,7 +298,7 @@ fun MainScreen(
     onAddClick: (Int) -> Unit,
     onSettingsClick: () -> Unit,
     onSearchClick: () -> Unit,
-    onReorderClick: () -> Unit, // <--- НОВЫЙ ПАРАМЕТР ДЛЯ КНОПКИ
+    onReorderClick: () -> Unit, //
     viewModel: DocumentsViewModel
 ) {
     val folders by viewModel.folders.collectAsState()
@@ -325,7 +325,7 @@ fun MainScreen(
                         .fillMaxWidth()
                         .padding(top = 80.dp, bottom = 24.dp)
                 ) {
-                    // Размещаем заголовок и кнопку на одной линии
+                    // Заголовок и кнопка на одной линии
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -333,7 +333,7 @@ fun MainScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.Top
                     ) {
-                        Column {
+                        Column(modifier = Modifier.zIndex(1f)) {
                             Text(
                                 text = "Мои документы",
                                 fontSize = 32.sp,
@@ -460,11 +460,14 @@ fun WolfMascotWithBubble() {
     val wolfPhrases = listOf(
         "Ваши документы под\u00A0моей надежной лапой!",
         "Сплю в\u00A0полглаза, охраняю ваши сканы.",
+        "Крепко держу папки! Подушечки лап строго вниз, чтобы ничего не выпало.",
         "Ни\u00A0один чужой нос сюда не\u00A0сунется! Аууу!",
+        "Держу ушки на макушке!",
+        "Аптечка первой помощи собрана, бэкап сделан. Мы готовы ко всему!",
         "Сейф заперт. Ключ я, пожалуй, закопаю.",
         "Р-р-р... Работает Jetpack Security!",
         "Кто хороший мальчик? Я\u00A0хороший мальчик!",
-        "Как дела? Дерижи хвост пистолетом!",
+        "Привет, как дела? Держи хвост пистолетом!",
         "Пароли зашифрованы, хвост пистолетом!"
     )
 
@@ -847,11 +850,10 @@ fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () ->
         ) {
             Spacer(modifier = Modifier.weight(0.3f))
 
-            Icon(
-                imageVector = Icons.Filled.Lock,
-                contentDescription = null,
-                modifier = Modifier.size(56.dp),
-                tint = MaterialTheme.colorScheme.primary
+            Image(
+                painter = painterResource(id = R.drawable.lock),
+                contentDescription = "Блокировка",
+                modifier = Modifier.size(56.dp)
             )
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -859,7 +861,7 @@ fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () ->
                 text = if (isError) "Неверный PIN-код" else "Введите PIN-код",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground
+                color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
             )
 
             Spacer(modifier = Modifier.height(16.dp))
