@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.Documents" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Documents" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Указываем фон окна до загрузки Compose -->
+        <item name="android:windowBackground">@color/splash_background_light</item>
+    </style>
 </resources>

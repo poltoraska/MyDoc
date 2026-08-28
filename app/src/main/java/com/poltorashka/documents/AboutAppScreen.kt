@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration // Добавлен импорт для конфигурации
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +39,11 @@ import bounceClick
 @Composable
 fun AboutAppScreen(onBackClick: () -> Unit) {
     val uriHandler = LocalUriHandler.current
+
+    // --- Вычисляет ширину экрана ---
+    val configuration = LocalConfiguration.current
+    val isWideScreen = configuration.screenWidthDp >= 600
+    // ------------------------------------------
 
     Column(
         modifier = Modifier
@@ -52,36 +58,74 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
             shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
             shadowElevation = 2.dp
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding() // МАГИЯ: отступ от часов теперь внутри шапки!
-                    .padding(top = 24.dp, bottom = 32.dp, start = 24.dp, end = 24.dp)
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surface,
+            // Адаптивная логика для шапки
+            if (isWideScreen) {
+                // РЕЖИМ ПЛАНШЕТА В одну строку
+                Row(
                     modifier = Modifier
-                        .size(44.dp)
-                        .bounceClick { onBackClick() }
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(top = 24.dp, bottom = 24.dp, start = 24.dp, end = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Назад",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .bounceClick { onBackClick() }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Назад",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                     }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Text(
+                        text = "О приложении",
+                        fontSize = 24.sp, // Чуть меньше для однострочного дизайна
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
                 }
+            } else {
+                // РЕЖИМ СМАРТФОНА в два этажа
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(top = 24.dp, bottom = 32.dp, start = 24.dp, end = 24.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .bounceClick { onBackClick() }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Назад",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                Text(
-                    text = "О приложении",
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
+                    Text(
+                        text = "О приложении",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
             }
         }
 

@@ -18,12 +18,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.poltorashka.documents.data.AppDatabase
 import com.poltorashka.documents.data.DocumentEntity
@@ -68,15 +71,23 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
 
     var selectedImages by remember { mutableStateOf<List<Uri>>(emptyList()) }
 
+    // Разрешает выбирать только 1 файл за раз
     val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris ->
-        selectedImages = selectedImages + uris
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            selectedImages = selectedImages + uri
+        }
     }
 
     val context = LocalContext.current
     val dao = remember { AppDatabase.getDatabase(context).documentDao() }
     val coroutineScope = rememberCoroutineScope()
+
+    // --- Вычисляет количество колонок ---
+    val configuration = LocalConfiguration.current
+    val isWideScreen = configuration.screenWidthDp >= 600
+    val columnsCount = if (isWideScreen) 2 else 1
 
     Scaffold(
         topBar = {
@@ -95,7 +106,7 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                             saveEncryptedFile(context, uri)
                         }
 
-                        // МАГИЯ ФОРМАТИРОВАНИЯ: Перед сохранением в БД превращаем цифры в дату
+                        // Перед сохранением в БД превращает цифры в дату
                         val formattedFields = inputValues.mapValues { (key, value) ->
                             if (key.contains("Дата", ignoreCase = true)) value.toDateString() else value
                         }
@@ -154,26 +165,85 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            currentFields.forEach { fieldLabel ->
-                val isDateField = fieldLabel.contains("Дата", ignoreCase = true)
+            // Поле ввода для Эмодзи-тега ---
+            val currentTag = inputValues["Тег"] ?: ""
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = ScallopShape(petals = 9, depth = 0.12f),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = currentTag.ifEmpty { "😊" },
+                            fontSize = 24.sp,
+                            modifier = Modifier.alpha(if (currentTag.isEmpty()) 0.4f else 1f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
 
                 OutlinedTextField(
-                    value = inputValues[fieldLabel] ?: "",
+                    value = currentTag,
                     onValueChange = { newValue ->
-                        if (isDateField) {
-                            // Оставляем только цифры и не больше 8
-                            val digits = newValue.filter { it.isDigit() }.take(8)
-                            inputValues[fieldLabel] = digits
+                        if (newValue.isEmpty()) {
+                            inputValues["Тег"] = ""
                         } else {
-                            inputValues[fieldLabel] = newValue
+                            // Удаляет обычный текст, цифры и пунктуацию
+                            val filtered = newValue.replace(Regex("[A-Za-zА-Яа-я0-9\\s\\.,!?\\-()'\"#@]"), "")
+                            if (filtered.isNotEmpty()) {
+                                // Ровно 1 символ включая сложные смайлики
+                                val codePoint = filtered.codePointAt(0)
+                                inputValues["Тег"] = String(Character.toChars(codePoint))
+                            }
                         }
                     },
-                    label = { Text(fieldLabel) },
-                    // Применяем маску и цифровую клавиатуру для дат
-                    visualTransformation = if (isDateField) DateTransformation() else VisualTransformation.None,
-                    keyboardOptions = if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    label = { Text("Эмодзи-тег") },
+                    placeholder = { Text("Например: 🚗") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f)
                 )
+            }
+
+            // --- Сетка полей (1 или 2 колонки) ---
+            currentFields.chunked(columnsCount).forEach { rowFields ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    rowFields.forEach { fieldLabel ->
+                        val isDateField = fieldLabel.contains("Дата", ignoreCase = true)
+
+                        OutlinedTextField(
+                            value = inputValues[fieldLabel] ?: "",
+                            onValueChange = { newValue ->
+                                if (isDateField) {
+                                    // Только цифры и не больше 8
+                                    val digits = newValue.filter { it.isDigit() }.take(8)
+                                    inputValues[fieldLabel] = digits
+                                } else {
+                                    inputValues[fieldLabel] = newValue
+                                }
+                            },
+                            label = { Text(fieldLabel) },
+                            // Маска и цифровая клавиатура для дат
+                            visualTransformation = if (isDateField) DateTransformation() else VisualTransformation.None,
+                            keyboardOptions = if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
+                            modifier = Modifier.weight(1f).padding(bottom = 8.dp)
+                        )
+                    }
+                    // Заполняет пустоту, если в последнем ряду меньше элементов, чем колонок
+                    if (rowFields.size < columnsCount) {
+                        repeat(columnsCount - rowFields.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

@@ -7,4 +7,8 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Цвет фона для светлой темы (мягкий белый) -->
+    <color name="splash_background_light">#FDFDFD</color>
+    <!-- Цвет фона для темной темы (глубокий серый/черный) -->
+    <color name="splash_background_dark">#121212</color>
 </resources>

@@ -59,6 +59,14 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import com.poltorashka.documents.data.ReorderScreen
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import kotlin.math.cos
+import kotlin.math.sin
 
 fun getDynamicGreeting(): String {
     val hour = java.time.LocalTime.now().hour
@@ -174,53 +182,95 @@ class MainActivity : FragmentActivity() {
                             composable("main") {
                                 val pagerState = rememberPagerState(pageCount = { 3 })
                                 val coroutineScope = rememberCoroutineScope()
+                                val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+                                val isWideScreen = configuration.screenWidthDp >= 600
+                                val handleAddClick: () -> Unit = {
+                                    if (pagerState.currentPage == 0) {
+                                        val activeFolderId = viewModel.selectedFolderId.value ?: viewModel.folders.value.firstOrNull()?.id
+                                        if (activeFolderId != null) {
+                                            navController.navigate("add/$activeFolderId")
+                                        }
+                                    } else {
+                                        navController.navigate("add/0")
+                                    }
+                                }
 
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    HorizontalPager(
-                                        state = pagerState,
-                                        modifier = Modifier.fillMaxSize(),
-                                        userScrollEnabled = true
-                                    ) { page ->
-                                        when (page) {
-                                            0 -> MainScreen(
-                                                onDocumentClick = { id -> navController.navigate("detail/$id") },
-                                                onAddClick = { folderId -> navController.navigate("add/$folderId") },
-                                                onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
-                                                onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                                                onReorderClick = { navController.navigate("reorder") },
-                                                viewModel = viewModel
-                                            )
-                                            1 -> SearchScreen(
-                                                onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                                if (isWideScreen) {
+                                    // --- РЕЖИМ ПЛАНШЕТА И FOLD ---
+                                    // Box вместо Row, чтобы меню висело поверх контента
+                                    Box(modifier = Modifier.fillMaxSize()) {
+
+                                        // 1. Экраны теперь занимают всю ширину, шапки растянутся до левого края
+                                        HorizontalPager(
+                                            state = pagerState,
+                                            modifier = Modifier.fillMaxSize(),
+                                            userScrollEnabled = true
+                                        ) { page ->
+                                            when (page) {
+                                                0 -> MainScreen(onDocumentClick = { id -> navController.navigate("detail/$id") }, onAddClick = { folderId -> navController.navigate("add/$folderId") }, onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } }, onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } }, onReorderClick = { navController.navigate("reorder") }, viewModel = viewModel)
+                                                1 -> SearchScreen(onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } }, onAddClick = { navController.navigate("add/0") }, onDocumentClick = { id -> navController.navigate("detail/$id") })
+                                                2 -> SettingsScreen(onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } }, onAboutClick = { navController.navigate("about") })
+                                            }
+                                        }
+
+                                        // 2. Островок меню плавает слева поверх экрана
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.CenterStart)
+                                                .fillMaxHeight()
+                                                .width(100.dp)
+                                        ) {
+                                            CustomSideNavigationRail(
+                                                activeTab = pagerState.currentPage,
                                                 onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                                                onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
-                                                onAddClick = { navController.navigate("add/0") },
-                                                onDocumentClick = { id -> navController.navigate("detail/$id") }
-                                            )
-                                            2 -> SettingsScreen(
-                                                onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                                                onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
                                                 onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                                                onAboutClick = { navController.navigate("about") }
+                                                onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
+                                                onAddClick = handleAddClick
                                             )
                                         }
                                     }
-
-                                    Box(modifier = Modifier.align(Alignment.BottomCenter)) {
-                                        CustomFloatingToolbar(
-                                            activeTab = pagerState.currentPage,
-                                            onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                                            onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                                            onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
-                                            onAddClick = {
-                                                if (pagerState.currentPage == 0) {
-                                                    val activeFolderId = viewModel.selectedFolderId.value ?: viewModel.folders.value.firstOrNull()?.id
-                                                    activeFolderId?.let { navController.navigate("add/$it") }
-                                                } else {
-                                                    navController.navigate("add/0")
-                                                }
+                                } else {
+                                    // --- РЕЖИМ СМАРТФОНА (Нижняя панель) ---
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        HorizontalPager(
+                                            state = pagerState,
+                                            modifier = Modifier.fillMaxSize(),
+                                            userScrollEnabled = true
+                                        ) { page ->
+                                            when (page) {
+                                                0 -> MainScreen(
+                                                    onDocumentClick = { id -> navController.navigate("detail/$id") },
+                                                    onAddClick = { folderId -> navController.navigate("add/$folderId") },
+                                                    onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
+                                                    onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                                                    onReorderClick = { navController.navigate("reorder") },
+                                                    viewModel = viewModel
+                                                )
+                                                1 -> SearchScreen(
+                                                    onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                                                    onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                                                    onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
+                                                    onAddClick = { navController.navigate("add/0") },
+                                                    onDocumentClick = { id -> navController.navigate("detail/$id") }
+                                                )
+                                                2 -> SettingsScreen(
+                                                    onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                                                    onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                                                    onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                                                    onAboutClick = { navController.navigate("about") }
+                                                )
                                             }
-                                        )
+                                        }
+
+                                        Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                                            CustomFloatingToolbar(
+                                                activeTab = pagerState.currentPage,
+                                                onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                                                onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                                                onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
+                                                onAddClick = handleAddClick
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -298,7 +348,7 @@ fun MainScreen(
     onAddClick: (Int) -> Unit,
     onSettingsClick: () -> Unit,
     onSearchClick: () -> Unit,
-    onReorderClick: () -> Unit, //
+    onReorderClick: () -> Unit,
     viewModel: DocumentsViewModel
 ) {
     val folders by viewModel.folders.collectAsState()
@@ -310,6 +360,12 @@ fun MainScreen(
     val context = LocalContext.current
     val prefs = remember { UserPreferences(context) }
     val userName = prefs.userName
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isWideScreen = configuration.screenWidthDp >= 600
+
+    // Вычисление отступов для планшета
+    val headerLeftPadding = if (isWideScreen) 100.dp else 24.dp
+    val contentLeftPadding = if (isWideScreen) 100.dp else 16.dp
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -329,7 +385,7 @@ fun MainScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp),
+                            .padding(start = headerLeftPadding, end = 24.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.Top
                     ) {
@@ -353,7 +409,7 @@ fun MainScreen(
                             }
                         }
 
-                        // КНОПКА "ИЗМЕНИТЬ ПОРЯДОК" (Карандашик)
+                        // КНОПКА "ИЗМЕНИТЬ ПОРЯДОК"
                         if (!isLoading && folders.isNotEmpty() && docs.isNotEmpty()) {
                             Surface(
                                 shape = CircleShape,
@@ -378,7 +434,7 @@ fun MainScreen(
                     if (!isLoading && folders.isNotEmpty()) {
                         LazyRow(
                             modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(horizontal = 24.dp),
+                            contentPadding = PaddingValues(start = headerLeftPadding, end = 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(folders) { folder ->
@@ -405,7 +461,7 @@ fun MainScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp)
+                .padding(start = contentLeftPadding, end = 16.dp)
         ) {
             if (isLoading) {
                 Box(modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
@@ -437,10 +493,9 @@ fun MainScreen(
                 }
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
+                    columns = GridCells.Adaptive(minSize = 170.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
                         top = innerPadding.calculateTopPadding() + 16.dp,
                         bottom = 120.dp
@@ -455,6 +510,7 @@ fun MainScreen(
     }
 }
 
+// -- Логика невероятных АУФ фраз --
 @Composable
 fun WolfMascotWithBubble() {
     val wolfPhrases = listOf(
@@ -560,6 +616,9 @@ fun DocumentCard(
     }
     val displayTitle = rawTitle.replace(" о ", " о\u00A0")
 
+    // Достаем эмодзи-тег
+    val tagEmoji = document.fieldsData["Тег"]
+
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -588,11 +647,27 @@ fun DocumentCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .padding(16.dp),
+                    .padding(horizontal = 16.dp),
                 textAlign = TextAlign.Center,
                 maxLines = 3,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
+
+            // --- НОВЫЙ БЛОК: Отрисовка тега-печеньки ---
+            if (!tagEmoji.isNullOrEmpty()) {
+                Surface(
+                    shape = ScallopShape(petals = 9, depth = 0.12f),
+                    color = MaterialTheme.colorScheme.primary, // Фирменный акцентный цвет
+                    modifier = Modifier
+                        .padding(12.dp)
+                        .size(36.dp)
+                        .align(Alignment.TopStart)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(text = tagEmoji, fontSize = 16.sp)
+                    }
+                }
+            }
         }
     }
 }
@@ -909,4 +984,87 @@ fun showBiometricPrompt(activity: FragmentActivity, onSuccess: () -> Unit) {
         .build()
 
     biometricPrompt.authenticate(promptInfo)
+}
+
+@Composable
+fun CustomSideNavigationRail(
+    activeTab: Int = 0,
+    onHomeClick: () -> Unit,
+    onSearchClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onAddClick: () -> Unit
+) {
+    val scale = 1.10f
+    val panelWidth = 64.dp * scale
+    val plusButtonSize = 64.dp * scale
+    val plusIconSize = 28.dp * scale
+    val innerPadding = 8.dp * scale
+    val iconSpacing = 8.dp * scale
+    val itemSize = 48.dp * scale
+
+    // Анимация вертикального ползунка
+    val indicatorOffset by animateDpAsState(
+        targetValue = innerPadding + (activeTab * (itemSize.value + iconSpacing.value)).dp,
+        animationSpec = spring(
+            stiffness = Spring.StiffnessMediumLow,
+            dampingRatio = Spring.DampingRatioLowBouncy
+        ),
+        label = "indicatorOffsetVertical"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(100.dp) // Ширина всей боковой зоны
+            .systemBarsPadding(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(32.dp, Alignment.CenterVertically)
+    ) {
+        // Кнопка с плюсом наверху
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            shadowElevation = 4.dp,
+            modifier = Modifier
+                .size(plusButtonSize)
+                .bounceClick(onAddClick)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = "Добавить",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(plusIconSize)
+                )
+            }
+        }
+
+        // Вертикальный островок навигации
+        Surface(
+            modifier = Modifier.width(panelWidth),
+            shape = RoundedCornerShape(50), // Закругленные края
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shadowElevation = 4.dp
+        ) {
+            Box(contentAlignment = Alignment.TopCenter) {
+                // Плавающий фон активной вкладки
+                Box(
+                    modifier = Modifier
+                        .offset(y = indicatorOffset)
+                        .size(itemSize)
+                        .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                )
+
+                Column(
+                    modifier = Modifier.padding(vertical = innerPadding),
+                    verticalArrangement = Arrangement.spacedBy(iconSpacing),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    ToolbarNavItem(isSelected = activeTab == 0, icon = Icons.Filled.Home, label = "Главная", onClick = onHomeClick, scale = scale)
+                    ToolbarNavItem(isSelected = activeTab == 1, icon = Icons.Filled.Search, label = "Поиск", onClick = onSearchClick, scale = scale)
+                    ToolbarNavItem(isSelected = activeTab == 2, icon = Icons.Filled.Settings, label = "Настройки", onClick = onSettingsClick, scale = scale)
+                }
+            }
+        }
+    }
 }

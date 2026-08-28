@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -81,6 +82,13 @@ fun SearchScreen(
         }
     }
 
+    // --- НОВЫЙ БЛОК: Вычисляем отступы для планшета ---
+    val configuration = LocalConfiguration.current
+    val isWideScreen = configuration.screenWidthDp >= 600
+    val headerLeftPadding = if (isWideScreen) 100.dp else 24.dp
+    val contentLeftPadding = if (isWideScreen) 100.dp else 16.dp
+    // ---------------------------------------------------
+
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
@@ -93,7 +101,8 @@ fun SearchScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 80.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
+                        // Добавлен адаптивный отступ headerLeftPadding
+                        .padding(top = 80.dp, bottom = 24.dp, start = headerLeftPadding, end = 24.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -154,7 +163,8 @@ fun SearchScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp)
+                // Добавлен адаптивный отступ контента (contentLeftPadding)
+                .padding(start = contentLeftPadding, end = 16.dp)
         ) {
             if (searchQuery.isBlank()) {
                 Column(
@@ -186,11 +196,11 @@ fun SearchScreen(
                 }
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
+                    // Адаптивная сетка вместо жестких двух колонок!
+                    columns = GridCells.Adaptive(minSize = 170.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize(),
-                    // ИЗМЕНЕНИЕ 4: Динамические отступы переданы прямо внутрь скроллящейся сетки
                     contentPadding = PaddingValues(
                         top = innerPadding.calculateTopPadding() + 16.dp,
                         bottom = innerPadding.calculateBottomPadding() + 120.dp

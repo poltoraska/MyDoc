@@ -56,7 +56,7 @@ fun Modifier.bounceClick(onClick: () -> Unit) = composed {
             interactionSource = remember { MutableInteractionSource() },
             indication = null,
             onClick = {
-                // Воспроизводим системный щелчок
+                // Воспроизводит системный щелчок
                 view.playSoundEffect(SoundEffectConstants.CLICK)
 
                 // Выполняется само действие кнопки

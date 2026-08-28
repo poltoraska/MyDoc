@@ -63,8 +63,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -77,8 +80,6 @@ import bounceClick
 import com.poltorashka.documents.data.AppDatabase
 import com.poltorashka.documents.data.FolderEntity
 import kotlinx.coroutines.delay
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -127,6 +128,12 @@ fun SettingsScreen(
 
     val haptics = LocalHapticFeedback.current
 
+    // --- НОВЫЙ БЛОК: Вычисляет отступы для планшета ---
+    val configuration = LocalConfiguration.current
+    val isWideScreen = configuration.screenWidthDp >= 600
+    val headerLeftPadding = if (isWideScreen) 100.dp else 24.dp
+    val contentLeftPadding = if (isWideScreen) 100.dp else 16.dp
+
     val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")
     ) { uri ->
@@ -152,19 +159,209 @@ fun SettingsScreen(
         }
     }
 
+    // КОМПОНЕНТЫ БЛОКОВ НАСТРОЕК (Вынесены для удобного перестроения сетки)
+
+    val profileBlock = @Composable {
+        Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text("Ваш профиль", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = userName,
+                    onValueChange = { userName = it },
+                    label = { Text("Имя") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.align(Alignment.End).bounceClick { prefs.userName = userName.trim() }
+                ) {
+                    Row(modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "Сохранить", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    val foldersBlock = @Composable {
+        Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Папки", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text(text = "Удерживайте, чтобы переместить. Смахните влево, чтобы изменить или удалить", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        shadowElevation = 2.dp,
+                        modifier = Modifier.size(40.dp).bounceClick { showAddDialog = true }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(imageVector = Icons.Filled.Add, contentDescription = "Добавить", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                LazyColumn(
+                    state = listState,
+                    userScrollEnabled = false,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 2000.dp)
+                        .pointerInput(localFolders) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { offset ->
+                                    val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { offset.y.toInt() in it.offset..(it.offset + it.size) }
+                                    if (item != null) {
+                                        draggingIndex = item.index; draggingItemOffset = 0f; revealedFolderId = null
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    }
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    val currentIndex = draggingIndex ?: return@detectDragGesturesAfterLongPress
+                                    draggingItemOffset += dragAmount.y
+                                    val threshold = itemHeightPx * 0.5f
+                                    if (draggingItemOffset > threshold && currentIndex < localFolders.size - 1) {
+                                        val nextIndex = currentIndex + 1
+                                        val temp = localFolders[currentIndex]
+                                        localFolders[currentIndex] = localFolders[nextIndex]
+                                        localFolders[nextIndex] = temp
+                                        draggingIndex = nextIndex
+                                        draggingItemOffset -= itemHeightPx
+                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    } else if (draggingItemOffset < -threshold && currentIndex > 0) {
+                                        val prevIndex = currentIndex - 1
+                                        val temp = localFolders[currentIndex]
+                                        localFolders[currentIndex] = localFolders[prevIndex]
+                                        localFolders[prevIndex] = temp
+                                        draggingIndex = prevIndex
+                                        draggingItemOffset += itemHeightPx
+                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    }
+                                },
+                                onDragEnd = { draggingIndex = null; draggingItemOffset = 0f; viewModel.updateFoldersOrder(localFolders) },
+                                onDragCancel = { draggingIndex = null; draggingItemOffset = 0f }
+                            )
+                        }
+                ) {
+                    itemsIndexed(localFolders, key = { _, folder -> folder.id }) { index, folder ->
+                        val modifier = if (index == draggingIndex) Modifier.zIndex(1f).graphicsLayer { translationY = draggingItemOffset; shadowElevation = 16.dp.toPx() } else Modifier.animateItem()
+                        Box(modifier = modifier) {
+                            CustomSwipeToRevealItem(
+                                folder = folder,
+                                isRevealed = revealedFolderId == folder.id,
+                                onRevealChange = { isRevealed -> revealedFolderId = if (isRevealed) folder.id else null },
+                                onEdit = { folderToEdit = folder; revealedFolderId = null },
+                                onDelete = { folderToDelete = folder; revealedFolderId = null }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    val securityBlock = @Composable {
+        Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text("Безопасность", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(text = "Настройте способы входа в приложение", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Вход по PIN-коду", fontSize = 16.sp)
+                    Switch(
+                        checked = isPinEnabledState,
+                        onCheckedChange = { isChecked ->
+                            if (isChecked) { isPinEnabledState = true; showPinSetupDialog = true } else {
+                                isPinEnabledState = false; prefs.isPinEnabled = false; prefs.appPin = ""; isBiometricEnabledState = false; prefs.isBiometricEnabled = false
+                            }
+                        }
+                    )
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = "Вход по биометрии", fontSize = 16.sp, color = if (isPinEnabledState) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+                    Switch(checked = isBiometricEnabledState, onCheckedChange = { isChecked -> prefs.isBiometricEnabled = isChecked; isBiometricEnabledState = isChecked }, enabled = isPinEnabledState)
+                }
+            }
+        }
+    }
+
+    val backupBlock = @Composable {
+        Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text("Резервное копирование", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(text = "Сохраните базу документов и фото в зашифрованный архив для переноса на другое устройство.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.height(20.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f).height(44.dp).bounceClick { showBackupDialog = true }) {
+                        Box(contentAlignment = Alignment.Center) { Text("Создать копию", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.weight(1f).height(44.dp).bounceClick { importLauncher.launch(arrayOf("*/*")) }) {
+                        Box(contentAlignment = Alignment.Center) { Text("Восстановить", color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
+                    }
+                }
+            }
+        }
+    }
+
+    val appearanceBlock = @Composable {
+        Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text("Оформление", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val themes = listOf("Авто", "Светлая", "Тёмная")
+                    themes.forEachIndexed { index, title ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (themeModeState == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.weight(1f).height(40.dp).bounceClick { themeModeState = index; prefs.themeMode = index; (context as? android.app.Activity)?.recreate() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(text = title, color = if (themeModeState == index) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                }
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Динамические цвета", fontSize = 16.sp)
+                            Text("Палитра подстраивается под обои (Material You)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        androidx.compose.material3.Switch(
+                            checked = isDynamicColorState,
+                            onCheckedChange = { isDynamicColorState = it; prefs.useDynamicColor = it; (context as? android.app.Activity)?.recreate() }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.secondaryContainer,
+                // Скругление остается одинаковым
                 shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
                 shadowElevation = 2.dp
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 80.dp, bottom = 24.dp, start = 24.dp, end = 24.dp),
+                        .padding(top = 80.dp, bottom = 24.dp, start = headerLeftPadding, end = 24.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -213,341 +410,61 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp)
+                // Отступ слева (contentLeftPadding)
+                .padding(start = contentLeftPadding, end = 16.dp)
                 .verticalScroll(screenScrollState)
                 .pointerInput(Unit) {
                     detectTapGestures(onTap = { revealedFolderId = null })
                 },
-            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             Spacer(modifier = Modifier.height(innerPadding.calculateTopPadding() + 8.dp))
 
-            // --- БЛОК 1: ПРОФИЛЬ ---
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text("Ваш профиль", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedTextField(
-                        value = userName,
-                        onValueChange = { userName = it },
-                        label = { Text("Имя") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .bounceClick { prefs.userName = userName.trim() }
+            // --- Адаптивный вывод блоков настроек ---
+            if (isWideScreen) {
+                // Планшет / Fold: Два столбца
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    // Левая колонка
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(24.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Сохранить", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
-                        }
+                        profileBlock()
+                        securityBlock()
+                        backupBlock()
+                    }
+                    // Правая колонка
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(24.dp)
+                    ) {
+                        foldersBlock()
+                        appearanceBlock()
                     }
                 }
-            }
-
-            // --- БЛОК 2: ПАПКИ ---
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Папки", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                            Text("Удерживайте, чтобы переместить. Смахните влево, чтобы изменить или удалить", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        IconButton(onClick = { showAddDialog = true }) {
-                            Icon(Icons.Filled.Add, contentDescription = "Добавить")
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    LazyColumn(
-                        state = listState,
-                        userScrollEnabled = false,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 2000.dp)
-                            .pointerInput(localFolders) {
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = { offset ->
-                                        val item = listState.layoutInfo.visibleItemsInfo.firstOrNull {
-                                            offset.y.toInt() in it.offset..(it.offset + it.size)
-                                        }
-                                        if (item != null) {
-                                            draggingIndex = item.index
-                                            draggingItemOffset = 0f
-                                            revealedFolderId = null
-
-                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        }
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        val currentIndex = draggingIndex ?: return@detectDragGesturesAfterLongPress
-                                        draggingItemOffset += dragAmount.y
-
-                                        val threshold = itemHeightPx * 0.5f
-                                        if (draggingItemOffset > threshold && currentIndex < localFolders.size - 1) {
-                                            val nextIndex = currentIndex + 1
-                                            val temp = localFolders[currentIndex]
-                                            localFolders[currentIndex] = localFolders[nextIndex]
-                                            localFolders[nextIndex] = temp
-                                            draggingIndex = nextIndex
-                                            draggingItemOffset -= itemHeightPx
-
-                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-
-                                        } else if (draggingItemOffset < -threshold && currentIndex > 0) {
-                                            val prevIndex = currentIndex - 1
-                                            val temp = localFolders[currentIndex]
-                                            localFolders[currentIndex] = localFolders[prevIndex]
-                                            localFolders[prevIndex] = temp
-                                            draggingIndex = prevIndex
-                                            draggingItemOffset += itemHeightPx
-
-                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        }
-                                    },
-                                    onDragEnd = {
-                                        draggingIndex = null
-                                        draggingItemOffset = 0f
-                                        viewModel.updateFoldersOrder(localFolders)
-                                    },
-                                    onDragCancel = {
-                                        draggingIndex = null
-                                        draggingItemOffset = 0f
-                                    }
-                                )
-                            }
-                    ) {
-                        itemsIndexed(localFolders, key = { _, folder -> folder.id }) { index, folder ->
-                            val modifier = if (index == draggingIndex) {
-                                Modifier.zIndex(1f).graphicsLayer {
-                                    translationY = draggingItemOffset
-                                    shadowElevation = 16.dp.toPx()
-                                }
-                            } else {
-                                Modifier.animateItem()
-                            }
-
-                            Box(modifier = modifier) {
-                                CustomSwipeToRevealItem(
-                                    folder = folder,
-                                    isRevealed = revealedFolderId == folder.id,
-                                    onRevealChange = { isRevealed -> revealedFolderId = if (isRevealed) folder.id else null },
-                                    onEdit = { folderToEdit = folder; revealedFolderId = null },
-                                    onDelete = { folderToDelete = folder; revealedFolderId = null }
-                                )
-                            }
-                        }
-                    }
+            } else {
+                // Телефон: Один столбец
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    profileBlock()
+                    foldersBlock()
+                    securityBlock()
+                    backupBlock()
+                    appearanceBlock()
                 }
             }
-
-            // --- БЛОК 3: БЕЗОПАСНОСТЬ ---
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text("Безопасность", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        text = "Настройте способы входа в приложение",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Вход по PIN-коду", fontSize = 16.sp)
-                        Switch(
-                            checked = isPinEnabledState,
-                            onCheckedChange = { isChecked ->
-                                if (isChecked) {
-                                    isPinEnabledState = true
-                                    showPinSetupDialog = true
-                                } else {
-                                    isPinEnabledState = false
-                                    prefs.isPinEnabled = false
-                                    prefs.appPin = ""
-                                    isBiometricEnabledState = false
-                                    prefs.isBiometricEnabled = false
-                                }
-                            }
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Вход по биометрии",
-                            fontSize = 16.sp,
-                            color = if (isPinEnabledState) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                        )
-                        Switch(
-                            checked = isBiometricEnabledState,
-                            onCheckedChange = { isChecked ->
-                                prefs.isBiometricEnabled = isChecked
-                                isBiometricEnabledState = isChecked
-                            },
-                            enabled = isPinEnabledState
-                        )
-                    }
-                }
-            }
-
-            // --- БЛОК 4: РЕЗЕРВНОЕ КОПИРОВАНИЕ ---
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text("Резервное копирование", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        text = "Сохраните базу документов и фото в зашифрованный архив для переноса на другое устройство.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp)
-                                .bounceClick { showBackupDialog = true }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("Создать копию", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp)
-                                .bounceClick { importLauncher.launch(arrayOf("*/*")) }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("Восстановить", color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // --- БЛОК 5: ОФОРМЛЕНИЕ ---
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text("Оформление", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        val themes = listOf("Авто", "Светлая", "Тёмная")
-                        themes.forEachIndexed { index, title ->
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (themeModeState == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(40.dp)
-                                    .bounceClick {
-                                        themeModeState = index
-                                        prefs.themeMode = index
-                                        (context as? android.app.Activity)?.recreate()
-                                    }
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = title,
-                                        color = if (themeModeState == index) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                        fontWeight = FontWeight.Medium,
-                                        fontSize = 14.sp
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Динамические цвета", fontSize = 16.sp)
-                                Text(
-                                    "Палитра подстраивается под обои (Material You)",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    lineHeight = 16.sp
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            androidx.compose.material3.Switch(
-                                checked = isDynamicColorState,
-                                onCheckedChange = {
-                                    isDynamicColorState = it
-                                    prefs.useDynamicColor = it
-                                    (context as? android.app.Activity)?.recreate()
-                                }
-                            )
-                        }
-                    }
-                }
-            }
+            // ---------------------------------------------------
 
             Spacer(modifier = Modifier.height(80.dp + innerPadding.calculateBottomPadding()))
         }
     }
 
-    // --- ДИАЛОГИ РЕЗЕРВНОГО КОПИРОВАНИЯ ---
+    // --- ДИАЛОГИ ---
     if (showBackupDialog) {
         var passwordInput by remember { mutableStateOf("") }
         AlertDialog(
@@ -608,21 +525,11 @@ fun SettingsScreen(
                     if (restorePasswordInput.isNotBlank() && selectedRestoreUri != null) {
                         showRestoreDialog = false
                         android.widget.Toast.makeText(context, "Восстановление...", android.widget.Toast.LENGTH_SHORT).show()
-
-                        try {
-                            com.poltorashka.documents.data.AppDatabase.getDatabase(context).close()
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-
+                        try { com.poltorashka.documents.data.AppDatabase.getDatabase(context).close() } catch (e: Exception) { e.printStackTrace() }
                         viewModel.restoreBackup(context, selectedRestoreUri!!, restorePasswordInput) { success ->
                             if (success) {
                                 android.widget.Toast.makeText(context, "Данные восстановлены успешно!", android.widget.Toast.LENGTH_LONG).show()
-
-                                kotlin.concurrent.thread {
-                                    Thread.sleep(1500)
-                                    Runtime.getRuntime().exit(0)
-                                }
+                                kotlin.concurrent.thread { Thread.sleep(1500); Runtime.getRuntime().exit(0) }
                             } else {
                                 android.widget.Toast.makeText(context, "Ошибка! Неверный пароль или файл поврежден.", android.widget.Toast.LENGTH_LONG).show()
                             }
@@ -637,14 +544,10 @@ fun SettingsScreen(
         )
     }
 
-    // --- ПОЛНОЭКРАННОЕ СОЗДАНИЕ PIN-КОДА (ЧЕРЕЗ DIALOG) ---
     if (showPinSetupDialog) {
         Dialog(
-            onDismissRequest = {
-                showPinSetupDialog = false
-                isPinEnabledState = false // Если нажали системную кнопку "Назад", откатываем тумблер
-            },
-            properties = DialogProperties(usePlatformDefaultWidth = false) // Растягивает диалог на весь экран
+            onDismissRequest = { showPinSetupDialog = false; isPinEnabledState = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             var pinInput by remember { mutableStateOf("") }
             var isConfirmMode by remember { mutableStateOf(false) }
@@ -652,49 +555,21 @@ fun SettingsScreen(
             var isError by remember { mutableStateOf(false) }
 
             LaunchedEffect(isError) {
-                if (isError) {
-                    delay(500)
-                    pinInput = ""
-                    isConfirmMode = false
-                    isError = false
-                }
+                if (isError) { delay(500); pinInput = ""; isConfirmMode = false; isError = false }
             }
 
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.background
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .systemBarsPadding()
-                        .padding(horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+            Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Column(modifier = Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.weight(0.3f))
-
-                    Icon(
-                        imageVector = Icons.Filled.Lock,
-                        contentDescription = null,
-                        modifier = Modifier.size(56.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    Icon(imageVector = Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(24.dp))
-
                     Text(
-                        text = if (isError) "PIN-коды не совпадают"
-                        else if (isConfirmMode) "Повторите PIN-код"
-                        else "Создайте PIN-код",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground
+                        text = if (isError) "PIN-коды не совпадают" else if (isConfirmMode) "Повторите PIN-код" else "Создайте PIN-код",
+                        fontSize = 24.sp, fontWeight = FontWeight.Bold, color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground
                     )
-
                     Spacer(modifier = Modifier.height(16.dp))
                     PinDots(pinLength = pinInput.length, isError = isError)
-
                     Spacer(modifier = Modifier.weight(1f))
-
                     CustomNumpad(
                         isBiometricEnabled = false,
                         onBiometricClick = {},
@@ -702,37 +577,18 @@ fun SettingsScreen(
                             if (pinInput.length < 4 && !isError) {
                                 pinInput += digit
                                 if (pinInput.length == 4) {
-                                    if (!isConfirmMode) {
-                                        firstPin = pinInput
-                                        pinInput = ""
-                                        isConfirmMode = true
-                                    } else {
+                                    if (!isConfirmMode) { firstPin = pinInput; pinInput = ""; isConfirmMode = true } else {
                                         if (pinInput == firstPin) {
-                                            prefs.appPin = pinInput
-                                            prefs.isPinEnabled = true
-                                            isPinEnabledState = true
-                                            showPinSetupDialog = false
-                                        } else {
-                                            isError = true
-                                        }
+                                            prefs.appPin = pinInput; prefs.isPinEnabled = true; isPinEnabledState = true; showPinSetupDialog = false
+                                        } else { isError = true }
                                     }
                                 }
                             }
                         },
-                        onBackspaceClick = {
-                            if (pinInput.isNotEmpty() && !isError) pinInput = pinInput.dropLast(1)
-                        }
+                        onBackspaceClick = { if (pinInput.isNotEmpty() && !isError) pinInput = pinInput.dropLast(1) }
                     )
-
                     Spacer(modifier = Modifier.height(24.dp))
-
-                    TextButton(
-                        onClick = {
-                            showPinSetupDialog = false
-                            isPinEnabledState = false // Откатываем тумблер, если передумали создавать ПИН
-                        },
-                        modifier = Modifier.padding(bottom = 24.dp)
-                    ) {
+                    TextButton(onClick = { showPinSetupDialog = false; isPinEnabledState = false }, modifier = Modifier.padding(bottom = 24.dp)) {
                         Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
                     }
                 }
@@ -747,10 +603,7 @@ fun SettingsScreen(
             title = { Text(if (folderToEdit != null) "Изменить папку" else "Новая папка") },
             text = {
                 OutlinedTextField(
-                    value = folderNameInput,
-                    onValueChange = { folderNameInput = it },
-                    label = { Text("Название") },
-                    singleLine = true
+                    value = folderNameInput, onValueChange = { folderNameInput = it }, label = { Text("Введите название папки") }, singleLine = true
                 )
             },
             confirmButton = {
@@ -774,10 +627,7 @@ fun SettingsScreen(
             title = { Text("Удалить папку?") },
             text = { Text("Папка «${folderToDelete?.name}» и все документы внутри неё будут удалены навсегда.") },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteFolder(folderToDelete!!.id)
-                    folderToDelete = null
-                }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = { viewModel.deleteFolder(folderToDelete!!.id); folderToDelete = null }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { folderToDelete = null }) { Text("Отмена") } }
         )
@@ -792,54 +642,29 @@ fun CustomSwipeToRevealItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val offset by animateDpAsState(
-        targetValue = if (isRevealed) (-120).dp else 0.dp,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
-    )
-
-    Box(
-        modifier = Modifier.fillMaxWidth().height(64.dp)
-    ) {
+    val offset by animateDpAsState(targetValue = if (isRevealed) (-120).dp else 0.dp, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+    Box(modifier = Modifier.fillMaxWidth().height(64.dp)) {
         Row(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .width(120.dp)
-                .fillMaxHeight(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.align(Alignment.CenterEnd).width(120.dp).fillMaxHeight(),
+            horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick = onEdit,
-                modifier = Modifier.background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-            ) {
+            IconButton(onClick = onEdit, modifier = Modifier.background(MaterialTheme.colorScheme.primaryContainer, CircleShape)) {
                 Icon(Icons.Filled.Edit, contentDescription = "Изменить", tint = MaterialTheme.colorScheme.onPrimaryContainer)
             }
-            IconButton(
-                onClick = onDelete,
-                modifier = Modifier.background(MaterialTheme.colorScheme.errorContainer, CircleShape)
-            ) {
+            IconButton(onClick = onDelete, modifier = Modifier.background(MaterialTheme.colorScheme.errorContainer, CircleShape)) {
                 Icon(Icons.Filled.Delete, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.onErrorContainer)
             }
         }
-
         ElevatedCard(
-            modifier = Modifier
-                .fillMaxSize()
-                .offset(x = offset)
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures { _, dragAmount ->
-                        if (dragAmount < -5) onRevealChange(true)
-                        if (dragAmount > 5) onRevealChange(false)
-                    }
+            modifier = Modifier.fillMaxSize().offset(x = offset).pointerInput(Unit) {
+                detectHorizontalDragGestures { _, dragAmount ->
+                    if (dragAmount < -5) onRevealChange(true)
+                    if (dragAmount > 5) onRevealChange(false)
                 }
-                .clickable { if (isRevealed) onRevealChange(false) },
+            }.clickable { if (isRevealed) onRevealChange(false) },
             shape = RoundedCornerShape(12.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(folder.name, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 Icon(Icons.Filled.Menu, contentDescription = "Перетащить", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }

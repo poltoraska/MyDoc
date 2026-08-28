@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -52,15 +53,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
@@ -96,7 +100,6 @@ private fun saveEncryptedFile(context: Context, uri: Uri): String? {
     }
 }
 
-// УНИВЕРСАЛЬНАЯ ФУНКЦИЯ ДЛЯ ОТКРЫТИЯ ФАЙЛОВ ЛЮБОГО ТИПА СИСТЕМОЙ
 private fun openFileExternally(context: Context, path: String) {
     try {
         val isPdf = path.endsWith(".pdf", ignoreCase = true)
@@ -189,8 +192,11 @@ fun DocumentDetailScreen(
     val document by viewModel.document.collectAsState()
     val context = LocalContext.current
 
-    var imageToDelete by remember { mutableStateOf<String?>(null) }
+    val configuration = LocalConfiguration.current
+    val isWideScreen = configuration.screenWidthDp >= 600
+    val columnsCount = if (isWideScreen) 2 else 1
 
+    var imageToDelete by remember { mutableStateOf<String?>(null) }
     var isEditing by remember { mutableStateOf(false) }
     var showDeleteDocDialog by remember { mutableStateOf(false) }
     val editedFields = remember { mutableStateMapOf<String, String>() }
@@ -210,7 +216,6 @@ fun DocumentDetailScreen(
         }
     }
 
-    // ТЕПЕРЬ МОЖНО ВЫБРАТЬ ТОЛЬКО 1 ФАЙЛ
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -269,84 +274,91 @@ fun DocumentDetailScreen(
                 shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
                 shadowElevation = 2.dp
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 80.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
-                ) {
-                    Box(modifier = Modifier.fillMaxWidth()) {
+                val titleText = if (isEditing) "Редактирование" else (document?.documentType?.replace(" о ", " о\u00A0") ?: "Загрузка...")
+
+                // --- ИЗМЕНЕНО: Адаптивная шапка ---
+                if (isWideScreen) {
+                    // РЕЖИМ ПЛАНШЕТА: Компактно, в одну строку
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 56.dp, bottom = 16.dp, start = 16.dp, end = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surface,
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .size(44.dp)
-                                .bounceClick { if (isEditing) isEditing = false else onBackClick() }
+                            shape = CircleShape, color = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.size(44.dp).bounceClick { if (isEditing) isEditing = false else onBackClick() }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = if (isEditing) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = if (isEditing) "Отмена" else "Назад",
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
+                                Icon(if (isEditing) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack, contentDescription = if (isEditing) "Отмена" else "Назад", tint = MaterialTheme.colorScheme.onSurface)
                             }
                         }
 
-                        Row(
-                            modifier = Modifier.align(Alignment.CenterEnd),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        Text(
+                            text = titleText, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (isEditing) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier
-                                        .height(44.dp)
-                                        .bounceClick {
-                                            val formattedFields = editedFields.mapValues { (key, value) ->
-                                                if (key.contains("Дата", ignoreCase = true)) value.toDateString() else value
-                                            }
-                                            document?.let { doc -> viewModel.updateFields(doc, formattedFields) }
-                                            isEditing = false
-                                        }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) {
-                                        Text("Сохранить", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
-                                    }
+                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.height(44.dp).bounceClick { val formattedFields = editedFields.mapValues { (key, value) -> if (key.contains("Дата", ignoreCase = true)) value.toDateString() else value }; document?.let { doc -> viewModel.updateFields(doc, formattedFields) }; isEditing = false }) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) { Text("Сохранить", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary) }
                                 }
                             } else {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(44.dp).bounceClick { showDeleteDocDialog = true }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Filled.Delete, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
-                                    }
+                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp).bounceClick { showDeleteDocDialog = true }) {
+                                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Delete, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
                                 }
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(44.dp).bounceClick { isEditing = true }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Filled.Edit, contentDescription = "Редактировать", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
-                                    }
+                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp).bounceClick { isEditing = true }) {
+                                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Edit, contentDescription = "Редактировать", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
                                 }
                             }
                         }
                     }
+                } else {
+                    // РЕЖИМ СМАРТФОНА: Классически, в два этажа
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 80.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Surface(
+                                shape = CircleShape, color = MaterialTheme.colorScheme.surface,
+                                modifier = Modifier.align(Alignment.CenterStart).size(44.dp).bounceClick { if (isEditing) isEditing = false else onBackClick() }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(if (isEditing) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack, contentDescription = if (isEditing) "Отмена" else "Назад", tint = MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                            Row(modifier = Modifier.align(Alignment.CenterEnd), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                if (isEditing) {
+                                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.height(44.dp).bounceClick { val formattedFields = editedFields.mapValues { (key, value) -> if (key.contains("Дата", ignoreCase = true)) value.toDateString() else value }; document?.let { doc -> viewModel.updateFields(doc, formattedFields) }; isEditing = false }) {
+                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) { Text("Сохранить", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary) }
+                                    }
+                                } else {
+                                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp).bounceClick { showDeleteDocDialog = true }) {
+                                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Delete, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
+                                    }
+                                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp).bounceClick { isEditing = true }) {
+                                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Edit, contentDescription = "Редактировать", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
+                                    }
+                                }
+                            }
+                        }
 
-                    Text(
-                        text = if (isEditing) "Редактирование" else (document?.documentType?.replace(" о ", " о\u00A0") ?: "Загрузка..."),
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Text(
+                            text = titleText, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
                 }
+                // ----------------------------------------
             }
         },
         floatingActionButton = {
@@ -410,42 +422,108 @@ fun DocumentDetailScreen(
                         val extraLabels = doc.fieldsData.keys.filter { !orderedLabels.contains(it) }
                         val finalLabels = orderedLabels + extraLabels
 
-                        if (isEditing) {
-                            finalLabels.forEach { label ->
-                                val isDateField = label.contains("Дата", ignoreCase = true)
+                        val displayLabels = finalLabels.filter { it != "Тег" }
 
+                        if (isEditing) {
+                            val currentTag = editedFields["Тег"] ?: ""
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = ScallopShape(petals = 9, depth = 0.12f),
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.size(56.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = currentTag.ifEmpty { "😊" },
+                                            fontSize = 24.sp,
+                                            modifier = Modifier.alpha(if (currentTag.isEmpty()) 0.4f else 1f)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
                                 OutlinedTextField(
-                                    value = editedFields[label] ?: "",
+                                    value = currentTag,
                                     onValueChange = { newValue ->
-                                        if (isDateField) {
-                                            val digits = newValue.filter { it.isDigit() }.take(8)
-                                            editedFields[label] = digits
+                                        if (newValue.isEmpty()) {
+                                            editedFields["Тег"] = ""
                                         } else {
-                                            editedFields[label] = newValue
-                                        }
-                                    },
-                                    label = { Text(label) },
-                                    visualTransformation = if (isDateField) DateTransformation() else VisualTransformation.None,
-                                    keyboardOptions = if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                                )
-                            }
-                        } else {
-                            finalLabels.forEach { label ->
-                                if (doc.fieldsData.containsKey(label)) {
-                                    val value = doc.fieldsData[label] ?: ""
-                                    DetailField(
-                                        label = label,
-                                        value = value,
-                                        onCopy = { textToCopy ->
-                                            if (textToCopy.isNotBlank()) {
-                                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                                val clip = android.content.ClipData.newPlainText("Скопировано", textToCopy)
-                                                clipboard.setPrimaryClip(clip)
-                                                Toast.makeText(context, "Скопировано", Toast.LENGTH_SHORT).show()
+                                            val filtered = newValue.replace(Regex("[A-Za-zА-Яа-я0-9\\s\\.,!?\\-()'\"#@]"), "")
+                                            if (filtered.isNotEmpty()) {
+                                                val codePoint = filtered.codePointAt(0)
+                                                editedFields["Тег"] = String(Character.toChars(codePoint))
                                             }
                                         }
-                                    )
+                                    },
+                                    label = { Text("Эмодзи-тег") },
+                                    placeholder = { Text("Например: 🚗") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            displayLabels.chunked(columnsCount).forEach { rowLabels ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    rowLabels.forEach { label ->
+                                        val isDateField = label.contains("Дата", ignoreCase = true)
+                                        OutlinedTextField(
+                                            value = editedFields[label] ?: "",
+                                            onValueChange = { newValue ->
+                                                if (isDateField) {
+                                                    val digits = newValue.filter { it.isDigit() }.take(8)
+                                                    editedFields[label] = digits
+                                                } else {
+                                                    editedFields[label] = newValue
+                                                }
+                                            },
+                                            label = { Text(label) },
+                                            visualTransformation = if (isDateField) DateTransformation() else VisualTransformation.None,
+                                            keyboardOptions = if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
+                                            modifier = Modifier.weight(1f).padding(bottom = 8.dp)
+                                        )
+                                    }
+                                    if (rowLabels.size < columnsCount) {
+                                        repeat(columnsCount - rowLabels.size) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            displayLabels.chunked(columnsCount).forEach { rowLabels ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    rowLabels.forEach { label ->
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            if (doc.fieldsData.containsKey(label)) {
+                                                val value = doc.fieldsData[label] ?: ""
+                                                DetailField(
+                                                    label = label,
+                                                    value = value,
+                                                    onCopy = { textToCopy ->
+                                                        if (textToCopy.isNotBlank()) {
+                                                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                            val clip = android.content.ClipData.newPlainText("Скопировано", textToCopy)
+                                                            clipboard.setPrimaryClip(clip)
+                                                            Toast.makeText(context, "Скопировано", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (rowLabels.size < columnsCount) {
+                                        repeat(columnsCount - rowLabels.size) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -484,7 +562,6 @@ fun DocumentDetailScreen(
                                 path = path,
                                 onDelete = { imageToDelete = path },
                                 onOpen = {
-                                    // ТЕПЕРЬ И ПДФ И КАРТИНКИ ОТКРЫВАЮТСЯ СИСТЕМОЙ ОДИНАКОВО
                                     openFileExternally(context, path)
                                 }
                             )

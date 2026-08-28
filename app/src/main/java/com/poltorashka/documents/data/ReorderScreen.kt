@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration // Добавлен импорт для конфигурации
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,8 +46,12 @@ fun ReorderScreen(
     val density = LocalDensity.current
     val itemHeightPx = with(density) { 64.dp.toPx() }
 
-    // ПОДКЛЮЧАЕМ СЛУЖБУ ВИБРАЦИИ
     val haptics = LocalHapticFeedback.current
+
+    // --- НОВЫЙ БЛОК: Вычисляем ширину экрана ---
+    val configuration = LocalConfiguration.current
+    val isWideScreen = configuration.screenWidthDp >= 600
+    // ------------------------------------------
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -54,38 +59,76 @@ fun ReorderScreen(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.secondaryContainer,
+                // Скругления оставляем неизменными, так как экран без бокового меню
                 shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
                 shadowElevation = 2.dp
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 64.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                // ИЗМЕНЕНО: Адаптивная логика шапки
+                if (isWideScreen) {
+                    // РЕЖИМ ПЛАНШЕТА: В одну строку
+                    Row(
                         modifier = Modifier
-                            .size(48.dp)
-                            .bounceClick { onBackClick() }
+                            .fillMaxWidth()
+                            .padding(top = 56.dp, bottom = 16.dp, start = 24.dp, end = 24.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Назад",
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                            modifier = Modifier
+                                .size(44.dp)
+                                .bounceClick { onBackClick() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Назад",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
                         }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        Text(
+                            text = "Порядок документов",
+                            fontSize = 24.sp, // Уменьшенный шрифт для однострочного дизайна
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
                     }
+                } else {
+                    // РЕЖИМ СМАРТФОНА: Классический двухуровневый дизайн
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 64.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                            modifier = Modifier
+                                .size(44.dp)
+                                .bounceClick { onBackClick() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Назад",
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(
-                        text = "Порядок документов",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+                        Text(
+                            text = "Порядок документов",
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
                 }
             }
         }
