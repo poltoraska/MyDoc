@@ -24,7 +24,7 @@
 
 ---
 
-## 📱 Экраны приложения
+## 📱 Экраны приложения (смартфон)
 
 ### 1. Главный экран 
 Отображает интерактивную ленту созданных папок и сетку документов внутри них. Здесь пользователя встречает анимированный маскот приложения. Документы защищены уникальной текстурой защитной сетки (гильош) для предотвращения визуального считывания.
@@ -46,6 +46,19 @@
 <p align="center">
   <img src="./screenshots/search_screen.png" width="240" alt="Экран поиска" style="margin: 10px;"/>
   <img src="./screenshots/settings_screen.png" width="240" alt="Экран настроек" style="margin: 10px;"/>
+</p>
+
+---
+
+## 📱 Экраны приложения (планшет/fold)
+
+<p align="center">
+  <img src="./screenshots/main_screen_fold.png.png" width="240" alt="Главный экран" style="margin: 10px;"/>
+  <img src="./screenshots/detail_screen_fold.png.png" width="240" alt="Просмотр документа" style="margin: 10px;"/>
+</p>
+<p align="center">
+  <img src="./screenshots/search_screen_fold.png.png" width="240" alt="Экран поиска" style="margin: 10px;"/>
+  <img src="./screenshots/settings_screen_fold.png.png" width="240" alt="Экран настроек" style="margin: 10px;"/>
 </p>
 
 ---
