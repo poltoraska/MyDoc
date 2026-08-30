@@ -16,7 +16,7 @@ android {
         applicationId = "com.whitewolf.documents"
         minSdk = 28
         targetSdk = 36
-        versionCode = 23
+        versionCode = 24
         versionName = "1.3.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

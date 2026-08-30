@@ -437,7 +437,7 @@ fun DocumentDetailScreen(
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Text(
-                                            text = currentTag.ifEmpty { "😊" },
+                                            text = currentTag.ifEmpty { "🐺" },
                                             fontSize = 24.sp,
                                             modifier = Modifier.alpha(if (currentTag.isEmpty()) 0.4f else 1f)
                                         )

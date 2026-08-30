@@ -39,4 +39,9 @@ class UserPreferences(context: Context) {
     var backgroundTimestamp: Long
         get() = prefs.getLong("background_timestamp", 0L)
         set(value) = prefs.edit().putLong("background_timestamp", value).apply()
+
+    // Пример того, что нужно добавить в UserPreferences:
+    var animationsEnabled: Boolean
+        get() = prefs.getBoolean("animations_enabled", true)
+        set(value) = prefs.edit().putBoolean("animations_enabled", value).apply()
 }

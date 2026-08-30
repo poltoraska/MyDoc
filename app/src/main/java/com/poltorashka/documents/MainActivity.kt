@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -31,7 +29,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -55,18 +52,20 @@ import com.poltorashka.documents.ui.theme.DocumentsTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Calendar
-import androidx.compose.runtime.toMutableStateList
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import com.poltorashka.documents.data.ReorderScreen
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
-import kotlin.math.cos
-import kotlin.math.sin
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.lazy.itemsIndexed
 
 fun getDynamicGreeting(): String {
     val hour = java.time.LocalTime.now().hour
@@ -437,18 +436,22 @@ fun MainScreen(
                             contentPadding = PaddingValues(start = headerLeftPadding, end = 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(folders) { folder ->
-                                val isSelected = activeFolderId == folder.id
-                                val containerColor by animateColorAsState(targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, label = "color")
-                                val contentColor by animateColorAsState(targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, label = "color")
+                            itemsIndexed(folders, key = { _, folder -> folder.id }) { index, folder ->
+                                StaggeredSpringAnimation(index = index) {
+                                    val isSelected = activeFolderId == folder.id
+                                    val containerColor by animateColorAsState(targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, label = "color")
+                                    val contentColor by animateColorAsState(targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, label = "color")
 
-                                Surface(
-                                    shape = RoundedCornerShape(50),
-                                    color = containerColor,
-                                    modifier = Modifier.height(48.dp).bounceClick { viewModel.selectFolder(folder.id) }
-                                ) {
-                                    Box(modifier = Modifier.padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
-                                        Text(text = folder.name, color = contentColor, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium)
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = containerColor,
+                                        modifier = Modifier
+                                            .height(48.dp)
+                                            .bounceClick { viewModel.selectFolder(folder.id) }
+                                    ) {
+                                        Box(modifier = Modifier.padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
+                                            Text(text = folder.name, color = contentColor, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium)
+                                        }
                                     }
                                 }
                             }
@@ -501,25 +504,24 @@ fun MainScreen(
                         bottom = 120.dp
                     )
                 ) {
-                    gridItems(docs, key = { it.id }) { doc ->
-                        DocumentCard(document = doc, onClick = { onDocumentClick(doc.id) })
+                    itemsIndexed(docs, key = { _, doc -> doc.id }) { index, doc ->
+                        StaggeredSpringAnimation(index = index) {
+                            DocumentCard(document = doc, onClick = { onDocumentClick(doc.id) })
+                        }
                     }
-                }
+                } // <-- Скобка выровнена
             }
         }
     }
 }
-
 // -- Логика невероятных АУФ фраз --
 @Composable
 fun WolfMascotWithBubble() {
     val wolfPhrases = listOf(
         "Ваши документы под\u00A0моей надежной лапой!",
         "Сплю в\u00A0полглаза, охраняю ваши сканы.",
-        "Крепко держу папки! Подушечки лап строго вниз, чтобы ничего не выпало.",
         "Ни\u00A0один чужой нос сюда не\u00A0сунется! Аууу!",
         "Держу ушки на макушке!",
-        "Аптечка первой помощи собрана, бэкап сделан. Мы готовы ко всему!",
         "Сейф заперт. Ключ я, пожалуй, закопаю.",
         "Р-р-р... Работает Jetpack Security!",
         "Кто хороший мальчик? Я\u00A0хороший мальчик!",
@@ -717,7 +719,8 @@ fun CustomFloatingToolbar(
                     modifier = Modifier
                         .offset(x = indicatorOffset)
                         .size(itemSize)
-                        .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                        // ИЗМЕНЕНО: primaryContainer, чтобы совпадать с кнопкой "+"
+                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                 )
 
                 Row(
@@ -769,7 +772,6 @@ fun CustomFloatingToolbar(
         }
     }
 }
-
 @Composable
 fun ToolbarNavItem(isSelected: Boolean, icon: ImageVector, label: String, onClick: () -> Unit, scale: Float) {
     val contentColor by animateColorAsState(
@@ -1042,7 +1044,7 @@ fun CustomSideNavigationRail(
         // Вертикальный островок навигации
         Surface(
             modifier = Modifier.width(panelWidth),
-            shape = RoundedCornerShape(50), // Закругленные края
+            shape = RoundedCornerShape(50),
             color = MaterialTheme.colorScheme.surfaceVariant,
             shadowElevation = 4.dp
         ) {
@@ -1052,7 +1054,7 @@ fun CustomSideNavigationRail(
                     modifier = Modifier
                         .offset(y = indicatorOffset)
                         .size(itemSize)
-                        .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
                 )
 
                 Column(
@@ -1066,5 +1068,54 @@ fun CustomSideNavigationRail(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun StaggeredSpringAnimation(
+    index: Int,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember { UserPreferences(context) }
+
+    if (!prefs.animationsEnabled) {
+        Box(modifier = modifier) {
+            content()
+        }
+        return
+    }
+    var isVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(index * 40L)
+        isVisible = true
+    }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0.8f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "scale_animation"
+    )
+
+    val alpha by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 300),
+        label = "alpha_animation"
+    )
+
+    Box(
+        modifier = modifier.graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+            this.alpha = alpha
+        }
+    ) {
+        content()
     }
 }

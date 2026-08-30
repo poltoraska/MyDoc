@@ -101,6 +101,8 @@ fun SettingsScreen(
     var themeModeState by remember { mutableIntStateOf(prefs.themeMode) }
     var isDynamicColorState by remember { mutableStateOf(prefs.useDynamicColor) }
 
+    var animationsEnabledState by remember { mutableStateOf(prefs.animationsEnabled) }
+
     val folders by viewModel.folders.collectAsState()
     val localFolders = remember(folders) { folders.toMutableStateList() }
 
@@ -303,8 +305,14 @@ fun SettingsScreen(
                         Box(contentAlignment = Alignment.Center) { Text("Создать копию", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.weight(1f).height(44.dp).bounceClick { importLauncher.launch(arrayOf("*/*")) }) {
-                        Box(contentAlignment = Alignment.Center) { Text("Восстановить", color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier.weight(1f).height(44.dp).bounceClick { importLauncher.launch(arrayOf("*/*")) }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("Восстановить", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
                     }
                 }
             }
@@ -316,6 +324,8 @@ fun SettingsScreen(
             Column(modifier = Modifier.padding(20.dp)) {
                 Text("Оформление", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
+
+                // Выбор темы (Авто, Светлая, Тёмная)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val themes = listOf("Авто", "Светлая", "Тёмная")
                     themes.forEachIndexed { index, title ->
@@ -330,12 +340,14 @@ fun SettingsScreen(
                         }
                     }
                 }
+
+                // Динамические цвета (Android 12+)
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Динамические цвета", fontSize = 16.sp)
-                            Text("Палитра подстраивается под обои (Material You)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
+                            Text("Палитра подстраивается под обои", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
                         }
                         Spacer(modifier = Modifier.width(16.dp))
                         androidx.compose.material3.Switch(
@@ -343,6 +355,23 @@ fun SettingsScreen(
                             onCheckedChange = { isDynamicColorState = it; prefs.useDynamicColor = it; (context as? android.app.Activity)?.recreate() }
                         )
                     }
+                }
+
+                // НОВАЯ НАСТРОЙКА: Анимации интерфейса
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Анимации интерфейса", fontSize = 16.sp)
+                        Text("Плавное появление и эффекты пружины", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    androidx.compose.material3.Switch(
+                        checked = animationsEnabledState,
+                        onCheckedChange = {
+                            animationsEnabledState = it
+                            prefs.animationsEnabled = it // Сохраняем в SharedPreferences
+                        }
+                    )
                 }
             }
         }
