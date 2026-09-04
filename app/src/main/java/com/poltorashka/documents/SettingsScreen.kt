@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -489,7 +490,7 @@ fun SettingsScreen(
             }
             // ---------------------------------------------------
 
-            Spacer(modifier = Modifier.height(80.dp + innerPadding.calculateBottomPadding()))
+            Spacer(modifier = Modifier.height(160.dp + innerPadding.calculateBottomPadding()))
         }
     }
 
@@ -576,7 +577,11 @@ fun SettingsScreen(
     if (showPinSetupDialog) {
         Dialog(
             onDismissRequest = { showPinSetupDialog = false; isPinEnabledState = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+                dismissOnBackPress = true
+            )
         ) {
             var pinInput by remember { mutableStateOf("") }
             var isConfirmMode by remember { mutableStateOf(false) }
@@ -588,37 +593,57 @@ fun SettingsScreen(
             }
 
             Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                Column(modifier = Modifier.fillMaxSize().systemBarsPadding().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Spacer(modifier = Modifier.weight(0.3f))
-                    Icon(imageVector = Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = if (isError) "PIN-коды не совпадают" else if (isConfirmMode) "Повторите PIN-код" else "Создайте PIN-код",
-                        fontSize = 24.sp, fontWeight = FontWeight.Bold, color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    PinDots(pinLength = pinInput.length, isError = isError)
-                    Spacer(modifier = Modifier.weight(1f))
-                    CustomNumpad(
-                        isBiometricEnabled = false,
-                        onBiometricClick = {},
-                        onNumberClick = { digit ->
-                            if (pinInput.length < 4 && !isError) {
-                                pinInput += digit
-                                if (pinInput.length == 4) {
-                                    if (!isConfirmMode) { firstPin = pinInput; pinInput = ""; isConfirmMode = true } else {
-                                        if (pinInput == firstPin) {
-                                            prefs.appPin = pinInput; prefs.isPinEnabled = true; isPinEnabledState = true; showPinSetupDialog = false
-                                        } else { isError = true }
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .widthIn(max = 400.dp)
+                            .fillMaxHeight()
+                            .systemBarsPadding()
+                            .padding(horizontal = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Spacer(modifier = Modifier.weight(0.3f))
+
+                        Image(
+                            painter = painterResource(id = R.drawable.lock),
+                            contentDescription = "Блокировка",
+                            modifier = Modifier.size(56.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text(
+                            text = if (isError) "PIN-коды не совпадают" else if (isConfirmMode) "Повторите PIN-код" else "Создайте PIN-код",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        PinDots(pinLength = pinInput.length, isError = isError)
+                        Spacer(modifier = Modifier.weight(1f))
+                        CustomNumpad(
+                            isBiometricEnabled = false,
+                            onBiometricClick = {},
+                            onNumberClick = { digit ->
+                                if (pinInput.length < 4 && !isError) {
+                                    pinInput += digit
+                                    if (pinInput.length == 4) {
+                                        if (!isConfirmMode) { firstPin = pinInput; pinInput = ""; isConfirmMode = true } else {
+                                            if (pinInput == firstPin) {
+                                                prefs.appPin = pinInput; prefs.isPinEnabled = true; isPinEnabledState = true; showPinSetupDialog = false
+                                            } else { isError = true }
+                                        }
                                     }
                                 }
-                            }
-                        },
-                        onBackspaceClick = { if (pinInput.isNotEmpty() && !isError) pinInput = pinInput.dropLast(1) }
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    TextButton(onClick = { showPinSetupDialog = false; isPinEnabledState = false }, modifier = Modifier.padding(bottom = 24.dp)) {
-                        Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
+                            },
+                            onBackspaceClick = { if (pinInput.isNotEmpty() && !isError) pinInput = pinInput.dropLast(1) }
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        TextButton(onClick = { showPinSetupDialog = false; isPinEnabledState = false }, modifier = Modifier.padding(bottom = 24.dp)) {
+                            Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
+                        }
                     }
                 }
             }

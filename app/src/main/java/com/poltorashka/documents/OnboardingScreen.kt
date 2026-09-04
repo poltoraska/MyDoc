@@ -55,6 +55,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import bounceClick
 import kotlinx.coroutines.launch
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 @Composable
 fun OnboardingScreen(onFinish: () -> Unit) {
@@ -80,112 +100,179 @@ fun OnboardingScreen(onFinish: () -> Unit) {
     }
 }
 
-// --- ШАГ 1: ЭКРАН ПРИВЕТСТВИЯ (БЕЗ ИЗМЕНЕНИЙ) ---
+// --- ШАГ 1: ЭКРАН ПРИВЕТСТВИЯ ---
 @Composable
 fun WelcomeStep(onNext: () -> Unit) {
     val uriHandler = LocalUriHandler.current
 
-    Column(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        val screenHeight = maxHeight
+        val scrollState = rememberScrollState()
+
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .statusBarsPadding(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = "Здравствуйте!",
-                fontSize = 36.sp,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(48.dp))
-            Image(
-                painter = painterResource(id = R.drawable.img_wolf),
-                contentDescription = "Иллюстрация волка",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .padding(horizontal = 32.dp),
-                contentScale = ContentScale.Fit
-            )
-        }
-
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+                .fillMaxSize()
+                .verticalScroll(scrollState)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 32.dp, vertical = 40.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .heightIn(min = screenHeight),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = "Ваши документы в одном месте",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(32.dp))
-                FeatureItem(iconRes = R.drawable.ic_shield_check, text = "Данные хранятся только локально на\u00A0вашем устройстве.")
-                Spacer(modifier = Modifier.height(24.dp))
-                FeatureItem(iconRes = R.drawable.ic_family_docs, text = "Управляйте своими документами и\u00A0файлами близких.")
-                Spacer(modifier = Modifier.height(24.dp))
-                FeatureItem(iconRes = R.drawable.ic_cloud_off, text = "Загружайте файлы и\u00A0получайте к\u00A0ним доступ без\u00A0интернета.")
 
-                Spacer(modifier = Modifier.height(40.dp))
-
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
+                // --- ВЕРХНЯЯ ЧАСТЬ (Текст, Волк, Волна) ---
+                Column(
                     modifier = Modifier
-                        .height(48.dp)
-                        .bounceClick { onNext() }
+                        .fillMaxWidth()
+                        .statusBarsPadding(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "Начать", fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onPrimary)
-                    }
+                    Spacer(modifier = Modifier.height(24.dp)) // Уменьшили с 48.dp
+
+                    Text(
+                        text = "Здравствуйте!",
+                        fontSize = 36.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp)) // Уменьшили с 32.dp
+
+                    Image(
+                        painter = painterResource(id = R.drawable.img_wolf),
+                        contentDescription = "Иллюстрация волка",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(170.dp) // Немного убавили размер волка (был 200.dp)
+                            .padding(horizontal = 32.dp),
+                        contentScale = ContentScale.Fit
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp)) // Уменьшили с 24.dp
+
+                    AnimatedWavyLine(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(32.dp)
+                            .padding(horizontal = 32.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp)) // Уменьшили с 32.dp
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // --- НИЖНЯЯ ЧАСТЬ (Карточка с преимуществами) ---
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .widthIn(max = 500.dp)
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                                .padding(horizontal = 32.dp, vertical = 28.dp), // Уменьшили с 40.dp
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Ваши документы в одном месте",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(24.dp)) // Уменьшили с 32.dp
 
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "Продолжая, вы принимаете условия",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "Политики конфиденциальности",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .bounceClick {
-                                uriHandler.openUri("https://gist.github.com/poltoraska/ce7d88dd68e768e4addda4766e416f97")
+                            FeatureItem(
+                                iconRes = R.drawable.ic_shield_check,
+                                title = "Абсолютная безопасность",
+                                description = "Вход по PIN-коду или\u00A0биометрии. Зашифрованные резервные копии."
+                            )
+                            Spacer(modifier = Modifier.height(16.dp)) // Уменьшили с 24.dp
+
+                            FeatureItem(
+                                iconRes = R.drawable.ic_family_docs,
+                                title = "Идеальный порядок",
+                                description = "Сортируйте документы по\u00A0папкам, добавляйте теги и\u00A0находите нужное за\u00A0секунду."
+                            )
+                            Spacer(modifier = Modifier.height(16.dp)) // Уменьшили с 24.dp
+
+                            FeatureItem(
+                                iconRes = R.drawable.ic_cloud_off,
+                                title = "Полная независимость",
+                                description = "Никаких серверов. Документы всегда под\u00A0рукой, даже без\u00A0интернета."
+                            )
+
+                            Spacer(modifier = Modifier.height(24.dp)) // Уменьшили с 40.dp
+
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "Продолжая, вы принимаете условия",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Политики конфиденциальности",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .bounceClick {
+                                            uriHandler.openUri("https://gist.github.com/poltoraska/ce7d88dd68e768e4addda4766e416f97")
+                                        }
+                                        .padding(vertical = 4.dp, horizontal = 8.dp)
+                                )
                             }
-                            .padding(vertical = 4.dp, horizontal = 8.dp)
-                    )
+
+                            Spacer(modifier = Modifier.height(16.dp)) // Уменьшили с 24.dp
+
+                            Surface(
+                                shape = RoundedCornerShape(32.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(72.dp) // Сделали кнопку чуть тоньше (было 76.dp)
+                                    .bounceClick { onNext() }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(start = 28.dp, end = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Поехали!",
+                                        fontSize = 20.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(56.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                                contentDescription = "Начать",
+                                                tint = MaterialTheme.colorScheme.onPrimary,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -193,11 +280,37 @@ fun WelcomeStep(onNext: () -> Unit) {
 }
 
 @Composable
-fun FeatureItem(iconRes: Int, text: String) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Icon(painter = painterResource(id = iconRes), contentDescription = null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+fun FeatureItem(iconRes: Int, title: String, description: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Иконка
+        Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = null,
+            modifier = Modifier.size(36.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+
         Spacer(modifier = Modifier.width(16.dp))
-        Text(text = text, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 22.sp)
+
+        // Текст (Заголовок + Описание)
+        Column {
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = description,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 18.sp
+            )
+        }
     }
 }
 
@@ -223,114 +336,154 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
         }
     }
 
-    Column(
+    // Делаем экран умным: узнаем его высоту и добавляем скролл
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .systemBarsPadding(),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .systemBarsPadding()
     ) {
-        Spacer(modifier = Modifier.height(48.dp))
+        val screenHeight = maxHeight
+        val scrollState = rememberScrollState()
 
-        Text(
-            text = "Давайте знакомиться!",
-            fontSize = 32.sp,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(64.dp))
-
-        TextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text("Имя") },
-            placeholder = { Text("Введите ваше имя") },
-            trailingIcon = {
-                if (name.isNotEmpty()) {
-                    IconButton(onClick = { name = "" }) {
-                        Icon(Icons.Filled.Clear, contentDescription = "Очистить")
-                    }
-                }
-            },
-            singleLine = true,
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 32.dp),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                unfocusedIndicatorColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-            )
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Ваше имя нужно для отображения в главном меню приложения.",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 32.dp),
-            lineHeight = 16.sp
-        )
-
-        Spacer(modifier = Modifier.height(48.dp))
-
-        Image(
-            painter = painterResource(id = R.drawable.img_wolf_keyboard),
-            contentDescription = "Лапки на клавиатуре",
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp)
-                .padding(horizontal = 32.dp),
-            contentScale = ContentScale.Fit
-        )
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .height(48.dp)
-                .bounceClick { onFinish(name) }
+                .fillMaxSize()
+                .verticalScroll(scrollState),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 24.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+            // Центральная колонка с ограничением ширины для планшетов
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 500.dp)
+                    .heightIn(min = screenHeight)
+                    .padding(horizontal = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Далее",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onPrimary
-                )
+                // --- ВЕРХНИЙ БЛОК (Заголовок, Поле ввода, Картинка) ---
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spacer(modifier = Modifier.height(48.dp))
+
+                    Text(
+                        text = "Давайте знакомиться!",
+                        fontSize = 32.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(48.dp))
+
+                    TextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Имя") },
+                        placeholder = { Text("Введите ваше имя") },
+                        trailingIcon = {
+                            if (name.isNotEmpty()) {
+                                IconButton(onClick = { name = "" }) {
+                                    Icon(Icons.Filled.Clear, contentDescription = "Очистить")
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        // Слегка скруглим углы для большей гармонии со стилем Expressive
+                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                            unfocusedIndicatorColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Ваше имя нужно для отображения в главном меню приложения.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Start,
+                        lineHeight = 16.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(48.dp))
+
+                    Image(
+                        painter = painterResource(id = R.drawable.img_wolf_keyboard),
+                        contentDescription = "Лапки на клавиатуре",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+
+                // --- НИЖНИЙ БЛОК (Кнопка Далее и Восстановление) ---
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    // Новая кнопка в стиле Material Expressive (как на первом экране)
+                    Surface(
+                        shape = RoundedCornerShape(32.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp)
+                            .bounceClick { onFinish(name) }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(start = 28.dp, end = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Готово!",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(56.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                        contentDescription = "Продолжить",
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Кнопка восстановления
+                    Text(
+                        text = "У меня уже есть резервная копия",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .bounceClick { importLauncher.launch(arrayOf("*/*")) }
+                            .padding(8.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Кнопка восстановления
-        Text(
-            text = "У меня уже есть резервная копия",
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .bounceClick { importLauncher.launch(arrayOf("*/*")) }
-                .padding(8.dp)
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
     }
 
     // ДИАЛОГ ВОССТАНОВЛЕНИЯ
@@ -359,7 +512,6 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
                         showRestoreDialog = false
                         android.widget.Toast.makeText(context, "Распаковка архива...", android.widget.Toast.LENGTH_SHORT).show()
 
-                        // Превентивно закрываем БД (хотя она тут скорее всего и не открывалась)
                         try {
                             com.poltorashka.documents.data.AppDatabase.getDatabase(context).close()
                         } catch (e: Exception) {
@@ -387,6 +539,69 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
             dismissButton = {
                 TextButton(onClick = { showRestoreDialog = false; selectedRestoreUri = null }) { Text("Отмена") }
             }
+        )
+    }
+}
+
+@Composable
+fun AnimatedWavyLine(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "wave_transition")
+    val phase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f, // Один полный цикл анимации
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 3000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "wave_phase"
+    )
+
+    val waveColor = MaterialTheme.colorScheme.primary
+
+    Canvas(modifier = modifier) {
+        val width = size.width
+        val height = size.height
+
+        // Защита от нулевого размера при первичной отрисовке
+        if (width <= 0f || height <= 0f) return@Canvas
+
+        val strokeWidthPx = 4.dp.toPx()
+        val waveWidthPx = 140.dp.toPx() // Жесткая ширина одного витка волны
+
+        // Вычитаем толщину линии, чтобы волна не срезалась сверху и снизу
+        val amplitude = (height - strokeWidthPx) / 2f
+        val centerY = height / 2f
+
+        val path = Path()
+
+        // Сдвиг фазы в радианах (от 0 до 2π)
+        val phaseShift = phase * 2 * Math.PI
+        // Частота: один полный цикл (2π) каждые 140.dp
+        val frequency = (2 * Math.PI) / waveWidthPx
+
+        var isFirst = true
+
+        // Рисуем волну поточечно (с шагом 3 пикселя для идеальной плавности)
+        for (x in 0..width.toInt() step 3) {
+            // Формула синуса, которая идеально вписывается в заданные рамки
+            val y = centerY + (Math.sin(x * frequency - phaseShift).toFloat() * amplitude)
+
+            if (isFirst) {
+                path.moveTo(x.toFloat(), y) // Начинаем СТРОГО от нуля!
+                isFirst = false
+            } else {
+                path.lineTo(x.toFloat(), y)
+            }
+        }
+
+        drawPath(
+            path = path,
+            color = waveColor,
+            style = Stroke(
+                width = strokeWidthPx,
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round
+            )
         )
     }
 }

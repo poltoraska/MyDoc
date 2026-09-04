@@ -66,6 +66,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.text.style.TextOverflow
 
 fun getDynamicGreeting(): String {
     val hour = java.time.LocalTime.now().hour
@@ -477,22 +481,98 @@ fun MainScreen(
                     }
                 }
             } else if (folders.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
-                    Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
-                        Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Перед добавлением первого документа необходимо создать папку в настройках приложения.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = innerPadding.calculateBottomPadding()),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            // ДОБАВЛЕНО: Ограничение ширины, чтобы на Fold карточка не растягивалась
+                            .widthIn(max = 400.dp)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        shape = RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            // ДОБАВЛЕНО: Изображение спящего волка
+                            // ДОБАВЛЕНО: Умное масштабирование без растягивания карточки
+                            Image(
+                                painter = painterResource(id = R.drawable.sleep_wolf),
+                                contentDescription = "Нет папок",
+                                modifier = Modifier
+                                    .width(250.dp)
+                                    .wrapContentHeight(),
+                                contentScale = ContentScale.FillWidth
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Text(
+                                text = "Перед добавлением первого документа необходимо создать папку в настройках приложения.",
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 15.sp,
+                                lineHeight = 22.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+
                             Spacer(modifier = Modifier.height(24.dp))
-                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.height(44.dp).bounceClick { onSettingsClick() }) {
-                                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 24.dp)) {
-                                    Text("Открыть настройки", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
+
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .height(44.dp)
+                                    .bounceClick { onSettingsClick() }
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.padding(horizontal = 24.dp)
+                                ) {
+                                    Text(
+                                        text = "Открыть настройки",
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
                                 }
                             }
                         }
                     }
                 }
             } else if (docs.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
-                    Text("В этой папке пока нет документов", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = innerPadding.calculateBottomPadding()),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.sleep_wolf),
+                            contentDescription = "Папка пуста",
+                            modifier = Modifier
+                                .width(250.dp) // Размер спящего волка
+                                .wrapContentHeight(),
+                            contentScale = ContentScale.FillWidth
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = "В этой папке пока нет документов",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 16.sp
+                        )
+                    }
                 }
             } else {
                 LazyVerticalGrid(
@@ -675,127 +755,6 @@ fun DocumentCard(
 }
 
 @Composable
-fun CustomFloatingToolbar(
-    activeTab: Int = 0,
-    onHomeClick: () -> Unit,
-    onSearchClick: () -> Unit,
-    onSettingsClick: () -> Unit,
-    onAddClick: () -> Unit
-) {
-    val scale = 1.10f
-    val panelHeight = 64.dp * scale
-    val plusButtonSize = 64.dp * scale
-    val plusIconSize = 28.dp * scale
-    val gapBetweenIslands = 12.dp * scale
-    val innerPadding = 8.dp * scale
-    val iconSpacing = 4.dp * scale
-    val itemSize = 48.dp * scale
-
-    val indicatorOffset by animateDpAsState(
-        targetValue = innerPadding + (activeTab * (itemSize.value + iconSpacing.value)).dp,
-        animationSpec = spring(
-            stiffness = Spring.StiffnessMediumLow,
-            dampingRatio = Spring.DampingRatioLowBouncy
-        ),
-        label = "indicatorOffset"
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 24.dp),
-        horizontalArrangement = Arrangement.spacedBy(gapBetweenIslands, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier.height(panelHeight),
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            shadowElevation = 4.dp
-        ) {
-            Box(contentAlignment = Alignment.CenterStart) {
-                Box(
-                    modifier = Modifier
-                        .offset(x = indicatorOffset)
-                        .size(itemSize)
-                        // ИЗМЕНЕНО: primaryContainer, чтобы совпадать с кнопкой "+"
-                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-                )
-
-                Row(
-                    modifier = Modifier.padding(horizontal = innerPadding),
-                    horizontalArrangement = Arrangement.spacedBy(iconSpacing),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    ToolbarNavItem(
-                        isSelected = activeTab == 0,
-                        icon = Icons.Filled.Home,
-                        label = "Главная",
-                        onClick = onHomeClick,
-                        scale = scale
-                    )
-                    ToolbarNavItem(
-                        isSelected = activeTab == 1,
-                        icon = Icons.Filled.Search,
-                        label = "Поиск",
-                        onClick = onSearchClick,
-                        scale = scale
-                    )
-                    ToolbarNavItem(
-                        isSelected = activeTab == 2,
-                        icon = Icons.Filled.Settings,
-                        label = "Настройки",
-                        onClick = onSettingsClick,
-                        scale = scale
-                    )
-                }
-            }
-        }
-
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shadowElevation = 4.dp,
-            modifier = Modifier
-                .size(plusButtonSize)
-                .bounceClick(onAddClick)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = "Добавить",
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(plusIconSize)
-                )
-            }
-        }
-    }
-}
-@Composable
-fun ToolbarNavItem(isSelected: Boolean, icon: ImageVector, label: String, onClick: () -> Unit, scale: Float) {
-    val contentColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-        label = "contentColor"
-    )
-
-    Box(
-        modifier = Modifier
-            .size(48.dp * scale)
-            .clip(CircleShape)
-            .bounceClick(onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = contentColor,
-            modifier = Modifier.size(24.dp * scale)
-        )
-    }
-}
-
-@Composable
 fun PinDots(pinLength: Int, isError: Boolean) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(20.dp),
@@ -918,50 +877,59 @@ fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () ->
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .systemBarsPadding()
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        // ДОБАВЛЕНО: Обертка Box для центрирования на широких экранах
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
-            Spacer(modifier = Modifier.weight(0.3f))
+            Column(
+                modifier = Modifier
+                    // ИЗМЕНЕНО: Ограничение максимальной ширины.
+                    // На смартфонах займет всю ширину, на Fold - не разъедется!
+                    .widthIn(max = 400.dp)
+                    .fillMaxHeight()
+                    .systemBarsPadding()
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.weight(0.3f))
 
-            Image(
-                painter = painterResource(id = R.drawable.lock),
-                contentDescription = "Блокировка",
-                modifier = Modifier.size(56.dp)
-            )
-            Spacer(modifier = Modifier.height(24.dp))
+                Image(
+                    painter = painterResource(id = R.drawable.lock),
+                    contentDescription = "Блокировка",
+                    modifier = Modifier.size(56.dp)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
 
-            Text(
-                text = if (isError) "Неверный PIN-код" else "Введите PIN-код",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-            )
+                Text(
+                    text = if (isError) "Неверный PIN-код" else "Введите PIN-код",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                )
 
-            Spacer(modifier = Modifier.height(16.dp))
-            PinDots(pinLength = pinInput.length, isError = isError)
+                Spacer(modifier = Modifier.height(16.dp))
+                PinDots(pinLength = pinInput.length, isError = isError)
 
-            Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.weight(1f))
 
-            CustomNumpad(
-                isBiometricEnabled = isBiometricEnabled,
-                onBiometricClick = { if (activity != null) showBiometricPrompt(activity, onSuccess) },
-                onNumberClick = { digit ->
-                    if (pinInput.length < 4 && !isError) {
-                        pinInput += digit
-                        if (pinInput.length == 4) {
-                            if (pinInput == correctPin) onSuccess()
-                            else isError = true
+                CustomNumpad(
+                    isBiometricEnabled = isBiometricEnabled,
+                    onBiometricClick = { if (activity != null) showBiometricPrompt(activity, onSuccess) },
+                    onNumberClick = { digit ->
+                        if (pinInput.length < 4 && !isError) {
+                            pinInput += digit
+                            if (pinInput.length == 4) {
+                                if (pinInput == correctPin) onSuccess()
+                                else isError = true
+                            }
                         }
-                    }
-                },
-                onBackspaceClick = { if (pinInput.isNotEmpty() && !isError) pinInput = pinInput.dropLast(1) }
-            )
+                    },
+                    onBackspaceClick = { if (pinInput.isNotEmpty() && !isError) pinInput = pinInput.dropLast(1) }
+                )
 
-            Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.height(48.dp))
+            }
         }
     }
 }
@@ -986,89 +954,6 @@ fun showBiometricPrompt(activity: FragmentActivity, onSuccess: () -> Unit) {
         .build()
 
     biometricPrompt.authenticate(promptInfo)
-}
-
-@Composable
-fun CustomSideNavigationRail(
-    activeTab: Int = 0,
-    onHomeClick: () -> Unit,
-    onSearchClick: () -> Unit,
-    onSettingsClick: () -> Unit,
-    onAddClick: () -> Unit
-) {
-    val scale = 1.10f
-    val panelWidth = 64.dp * scale
-    val plusButtonSize = 64.dp * scale
-    val plusIconSize = 28.dp * scale
-    val innerPadding = 8.dp * scale
-    val iconSpacing = 8.dp * scale
-    val itemSize = 48.dp * scale
-
-    // Анимация вертикального ползунка
-    val indicatorOffset by animateDpAsState(
-        targetValue = innerPadding + (activeTab * (itemSize.value + iconSpacing.value)).dp,
-        animationSpec = spring(
-            stiffness = Spring.StiffnessMediumLow,
-            dampingRatio = Spring.DampingRatioLowBouncy
-        ),
-        label = "indicatorOffsetVertical"
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxHeight()
-            .width(100.dp) // Ширина всей боковой зоны
-            .systemBarsPadding(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(32.dp, Alignment.CenterVertically)
-    ) {
-        // Кнопка с плюсом наверху
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            shadowElevation = 4.dp,
-            modifier = Modifier
-                .size(plusButtonSize)
-                .bounceClick(onAddClick)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = Icons.Filled.Add,
-                    contentDescription = "Добавить",
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(plusIconSize)
-                )
-            }
-        }
-
-        // Вертикальный островок навигации
-        Surface(
-            modifier = Modifier.width(panelWidth),
-            shape = RoundedCornerShape(50),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            shadowElevation = 4.dp
-        ) {
-            Box(contentAlignment = Alignment.TopCenter) {
-                // Плавающий фон активной вкладки
-                Box(
-                    modifier = Modifier
-                        .offset(y = indicatorOffset)
-                        .size(itemSize)
-                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-                )
-
-                Column(
-                    modifier = Modifier.padding(vertical = innerPadding),
-                    verticalArrangement = Arrangement.spacedBy(iconSpacing),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    ToolbarNavItem(isSelected = activeTab == 0, icon = Icons.Filled.Home, label = "Главная", onClick = onHomeClick, scale = scale)
-                    ToolbarNavItem(isSelected = activeTab == 1, icon = Icons.Filled.Search, label = "Поиск", onClick = onSearchClick, scale = scale)
-                    ToolbarNavItem(isSelected = activeTab == 2, icon = Icons.Filled.Settings, label = "Настройки", onClick = onSettingsClick, scale = scale)
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -1117,5 +1002,231 @@ fun StaggeredSpringAnimation(
         }
     ) {
         content()
+    }
+}
+
+// -- Навигационные панели --
+
+@Composable
+fun CustomFloatingToolbar(
+    activeTab: Int = 0,
+    onHomeClick: () -> Unit,
+    onSearchClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onAddClick: () -> Unit
+) {
+    val scale = 1.10f
+    val panelHeight = 64.dp * scale
+    val plusButtonSize = 64.dp * scale
+    val plusIconSize = 28.dp * scale
+    val gapBetweenIslands = 12.dp * scale
+    val innerPadding = 8.dp * scale
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(gapBetweenIslands, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // --- Основная панель навигации (Капсула) ---
+        Surface(
+            modifier = Modifier.height(panelHeight),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shadowElevation = 4.dp
+        ) {
+            Row(
+                // Внутренние отступы капсулы
+                modifier = Modifier.padding(horizontal = innerPadding, vertical = innerPadding),
+                horizontalArrangement = Arrangement.spacedBy(4.dp * scale),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ToolbarNavItem(isSelected = activeTab == 0, icon = Icons.Filled.Home, label = "Главная", onClick = onHomeClick, scale = scale)
+                ToolbarNavItem(isSelected = activeTab == 1, icon = Icons.Filled.Search, label = "Поиск", onClick = onSearchClick, scale = scale)
+                ToolbarNavItem(isSelected = activeTab == 2, icon = Icons.Filled.Settings, label = "Настройки", onClick = onSettingsClick, scale = scale)
+            }
+        }
+
+        // --- Кнопка FAB в форме суперэллипса (Squircle) ---
+        // Это характерная черта стиля Material Expressive
+        Surface(
+            shape = RoundedCornerShape(16.dp * scale),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            shadowElevation = 4.dp,
+            modifier = Modifier
+                .size(plusButtonSize)
+                .bounceClick(onAddClick)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = "Добавить",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(plusIconSize)
+                )
+            }
+        }
+    }
+}
+
+// --- Компонент вкладки для Смартфона (Раскрывается по горизонтали) ---
+@Composable
+fun ToolbarNavItem(isSelected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, scale: Float) {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    // Плавная смена цветов
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        label = "nav_bg"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "nav_content"
+    )
+
+    Row(
+        modifier = Modifier
+            .height(48.dp * scale)
+            .clip(CircleShape)
+            .background(backgroundColor)
+            .bounceClick {
+                if (!isSelected) {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                }
+                onClick()
+            }
+            // Динамические отступы: больше места, если вкладка открыта
+            .padding(horizontal = if (isSelected) (16.dp * scale) else (12.dp * scale))
+            // МАГИЯ: Автоматическая пружинная анимация изменения ширины
+            .animateContentSize(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessLow
+                )
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = contentColor,
+            modifier = Modifier.size(24.dp * scale)
+        )
+
+        // Плавно показывает текст только у активной вкладки
+        AnimatedVisibility(visible = isSelected) {
+            Row {
+                Spacer(modifier = Modifier.width(8.dp * scale))
+                Text(
+                    text = label,
+                    color = contentColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+            }
+        }
+    }
+}
+
+// --- Панель для Планшетов и Fold ---
+@Composable
+fun CustomSideNavigationRail(
+    activeTab: Int = 0,
+    onHomeClick: () -> Unit,
+    onSearchClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onAddClick: () -> Unit
+) {
+    val scale = 1.10f
+    val panelWidth = 64.dp * scale
+    val plusButtonSize = 64.dp * scale
+    val plusIconSize = 28.dp * scale
+    val innerPadding = 8.dp * scale
+
+    Column(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(100.dp)
+            .systemBarsPadding(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(32.dp, Alignment.CenterVertically)
+    ) {
+        // Кнопка FAB (Squircle)
+        Surface(
+            shape = RoundedCornerShape(16.dp * scale),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            shadowElevation = 4.dp,
+            modifier = Modifier
+                .size(plusButtonSize)
+                .bounceClick(onAddClick)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = "Добавить",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(plusIconSize)
+                )
+            }
+        }
+
+        // Вертикальная панель
+        Surface(
+            modifier = Modifier.width(panelWidth),
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shadowElevation = 4.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(vertical = innerPadding, horizontal = innerPadding),
+                verticalArrangement = Arrangement.spacedBy(8.dp * scale),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                RailNavItem(isSelected = activeTab == 0, icon = Icons.Filled.Home, label = "Главная", onClick = onHomeClick, scale = scale)
+                RailNavItem(isSelected = activeTab == 1, icon = Icons.Filled.Search, label = "Поиск", onClick = onSearchClick, scale = scale)
+                RailNavItem(isSelected = activeTab == 2, icon = Icons.Filled.Settings, label = "Настройки", onClick = onSettingsClick, scale = scale)
+            }
+        }
+    }
+}
+
+// --- Компонент вкладки для Планшета (Только иконки, каноничный минимализм) ---
+@Composable
+fun RailNavItem(isSelected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, scale: Float) {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    // Плавная анимация фона и цвета иконки
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        label = "rail_bg"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "rail_content"
+    )
+
+    // Box с фиксированным размером для идеального круга
+    Box(
+        modifier = Modifier
+            .size(48.dp * scale)
+            .clip(CircleShape)
+            .background(backgroundColor)
+            .bounceClick {
+                if (!isSelected) {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                }
+                onClick()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = contentColor,
+            modifier = Modifier.size(24.dp * scale)
+        )
     }
 }
