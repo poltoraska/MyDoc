@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./images/app_icons/NewIcon.png" width="120" alt="Иконка приложения Мои Документы"/>
+  <img src="./images/app_icons/NewIconF.png" width="120" alt="Иконка приложения Мои Документы"/>
 </p>
 
 <h1 align="center">Мои Документы</h1>
