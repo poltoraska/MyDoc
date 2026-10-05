@@ -28,13 +28,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration // Добавлен импорт для конфигурации
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import bounceClick
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 @Composable
 fun AboutAppScreen(onBackClick: () -> Unit) {
@@ -130,10 +132,14 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
         }
 
         // --- КОНТЕНТ ---
+        val scrollState = rememberScrollState() // Запоминает позицию прокрутки
+
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp)
+                .fillMaxWidth()
+                .weight(1f) // Важно: заставляет колонку занять ровно всё место ПОД шапкой
+                .verticalScroll(scrollState) // Включает вертикальную прокрутку
+                .padding(24.dp) // Отступы по краям
         ) {
             // Карточка с благодарностью
             Surface(
@@ -141,13 +147,28 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
             ) {
-                Text(
-                    text = "Спасибо, что выбрали «Мои Документы 🐺»!\n\nЭтот проект создавался с особым вниманием к деталям и безопасности. Здесь нет облачных серверов, скрытой аналитики или трекеров — все ваши данные остаются строго на вашем устройстве.\n\nНадеюсь, вам так же приятно пользоваться этим приложением, как мне было интересно его разрабатывать.",
-                    modifier = Modifier.padding(24.dp),
-                    fontSize = 15.sp,
-                    lineHeight = 22.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column(
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    // КАРТИНКА ВОЛКА
+                    Image(
+                        painter = painterResource(id = R.drawable.sleep_wolf),
+                        contentDescription = "Маскот",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .align(Alignment.CenterHorizontally) // Волк по центру
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Спасибо, что выбрали «Мои Документы»!\n\nЭтот проект создавался с особым вниманием к деталям и безопасности. Здесь нет облачных серверов, скрытой аналитики или трекеров — все ваши данные остаются строго на вашем устройстве.\n\nНадеюсь, вам так же приятно пользоваться этим приложением, как мне было интересно его разрабатывать 🐺.",
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
