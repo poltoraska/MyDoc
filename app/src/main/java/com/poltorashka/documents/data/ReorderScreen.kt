@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration // Добавлен импорт для конфигурации
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,6 +30,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import bounceClick
 import com.poltorashka.documents.DocumentsViewModel
+import com.poltorashka.documents.R
+import androidx.compose.ui.res.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,6 +39,7 @@ fun ReorderScreen(
     onBackClick: () -> Unit,
     viewModel: DocumentsViewModel
 ) {
+    val context = LocalContext.current
     val docs by viewModel.documents.collectAsState()
     val localDocs = remember(docs) { docs.toMutableStateList() }
 
@@ -82,7 +86,7 @@ fun ReorderScreen(
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Назад",
+                                    contentDescription = stringResource(R.string.ui_nazad),
                                     tint = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
                             }
@@ -91,7 +95,7 @@ fun ReorderScreen(
                         Spacer(modifier = Modifier.width(16.dp))
 
                         Text(
-                            text = "Порядок документов",
+                            text = stringResource(R.string.ui_poryadok_dokumentov),
                             fontSize = 24.sp, // Уменьшенный шрифт для однострочного дизайна
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -114,7 +118,7 @@ fun ReorderScreen(
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Назад",
+                                    contentDescription = stringResource(R.string.ui_nazad),
                                     tint = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
                             }
@@ -123,7 +127,7 @@ fun ReorderScreen(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Text(
-                            text = "Порядок документов",
+                            text = stringResource(R.string.ui_poryadok_dokumentov),
                             fontSize = 32.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -140,7 +144,7 @@ fun ReorderScreen(
                 .padding(horizontal = 16.dp, vertical = 24.dp)
         ) {
             Text(
-                text = "Удерживайте иконку справа, чтобы перетащить документ и изменить его положение.",
+                text = stringResource(R.string.ui_uderzhivayte_ikonku_sprava_chtoby_peretashchit_d),
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 8.dp).padding(bottom = 16.dp)
@@ -227,7 +231,11 @@ fun ReorderScreen(
                             Modifier.animateItem()
                         }
 
-                        val rawTitle = if (doc.documentType == "Другое") doc.fieldsData["Название документа"] ?: "Другое" else doc.documentType
+                        val rawTitle = if (doc.documentType == "Другое") {
+                            doc.fieldsData["Название документа"] ?: context.getString(R.string.document_type_other)
+                        } else {
+                            DocumentTemplates.documentTypeLabel(doc.documentType, context.resources)
+                        }
 
                         Box(modifier = modifier) {
                             Row(
@@ -249,7 +257,7 @@ fun ReorderScreen(
                                 )
                                 Icon(
                                     imageVector = Icons.Filled.Menu,
-                                    contentDescription = "Перетащить",
+                                    contentDescription = stringResource(R.string.ui_peretashchit),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }

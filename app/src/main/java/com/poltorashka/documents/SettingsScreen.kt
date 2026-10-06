@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -81,6 +82,7 @@ import bounceClick
 import com.poltorashka.documents.data.AppDatabase
 import com.poltorashka.documents.data.FolderEntity
 import kotlinx.coroutines.delay
+import androidx.compose.ui.res.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,7 +96,8 @@ fun SettingsScreen(
             AppDatabase.getDatabase(LocalContext.current).documentDao()
         )
     ),
-    onAboutClick: () -> Unit
+    onAboutClick: () -> Unit,
+    isWideLayout: Boolean? = null
 ) {
     val context = LocalContext.current
     val prefs = remember { UserPreferences(context) }
@@ -133,20 +136,20 @@ fun SettingsScreen(
 
     // --- НОВЫЙ БЛОК: Вычисляет отступы для планшета ---
     val configuration = LocalConfiguration.current
-    val isWideScreen = configuration.screenWidthDp >= 600
-    val headerLeftPadding = if (isWideScreen) 100.dp else 24.dp
-    val contentLeftPadding = if (isWideScreen) 100.dp else 16.dp
+    val isWideScreen = isWideLayout ?: (configuration.screenWidthDp >= 600)
+    val headerHorizontalPadding = if (isWideScreen) 16.dp else 24.dp
+    val contentLeftPadding = 16.dp
 
     val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")
     ) { uri ->
         if (uri != null && backupPasswordTemp.isNotEmpty()) {
-            android.widget.Toast.makeText(context, "Создание копии...", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, context.getString(R.string.ui_sozdanie_kopii), android.widget.Toast.LENGTH_SHORT).show()
             viewModel.createBackup(context, uri, backupPasswordTemp) { success ->
                 if (success) {
-                    android.widget.Toast.makeText(context, "Копия успешно сохранена!", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(context, context.getString(R.string.ui_kopiya_uspeshno_sokhranena), android.widget.Toast.LENGTH_LONG).show()
                 } else {
-                    android.widget.Toast.makeText(context, "Ошибка создания копии", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(context, context.getString(R.string.ui_oshibka_sozdaniya_kopii), android.widget.Toast.LENGTH_LONG).show()
                 }
                 backupPasswordTemp = ""
             }
@@ -167,12 +170,12 @@ fun SettingsScreen(
     val profileBlock = @Composable {
         Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Text("Ваш профиль", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.ui_vash_profil), fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
                     value = userName,
                     onValueChange = { userName = it },
-                    label = { Text("Имя") },
+                    label = { Text(stringResource(R.string.ui_imya)) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -183,7 +186,7 @@ fun SettingsScreen(
                     modifier = Modifier.align(Alignment.End).bounceClick { prefs.userName = userName.trim() }
                 ) {
                     Row(modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = "Сохранить", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                        Text(text = stringResource(R.string.ui_sokhranit), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -195,8 +198,8 @@ fun SettingsScreen(
             Column(modifier = Modifier.padding(20.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Папки", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text(text = "Удерживайте, чтобы переместить. Смахните влево, чтобы изменить или удалить", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.ui_papki), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text(text = stringResource(R.string.ui_uderzhivayte_chtoby_peremestit_smakhnite_vlevo_c), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     Surface(
@@ -206,7 +209,7 @@ fun SettingsScreen(
                         modifier = Modifier.size(40.dp).bounceClick { showAddDialog = true }
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(imageVector = Icons.Filled.Add, contentDescription = "Добавить", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                            Icon(imageVector = Icons.Filled.Add, contentDescription = stringResource(R.string.ui_dobavit_2), tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
                         }
                     }
                 }
@@ -273,11 +276,11 @@ fun SettingsScreen(
     val securityBlock = @Composable {
         Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Text("Безопасность", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text(text = "Настройте способы входа в приложение", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.ui_bezopasnost), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(text = stringResource(R.string.ui_nastroyte_sposoby_vkhoda_v_prilozhenie), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Вход по PIN-коду", fontSize = 16.sp)
+                    Text(stringResource(R.string.ui_vkhod_po_pin_kodu), fontSize = 16.sp)
                     Switch(
                         checked = isPinEnabledState,
                         onCheckedChange = { isChecked ->
@@ -288,7 +291,7 @@ fun SettingsScreen(
                     )
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "Вход по биометрии", fontSize = 16.sp, color = if (isPinEnabledState) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+                    Text(text = stringResource(R.string.ui_vkhod_po_biometrii), fontSize = 16.sp, color = if (isPinEnabledState) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
                     Switch(checked = isBiometricEnabledState, onCheckedChange = { isChecked -> prefs.isBiometricEnabled = isChecked; isBiometricEnabledState = isChecked }, enabled = isPinEnabledState)
                 }
             }
@@ -298,12 +301,12 @@ fun SettingsScreen(
     val backupBlock = @Composable {
         Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Text("Резервное копирование", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text(text = "Сохраните базу документов и фото в зашифрованный архив для переноса на другое устройство.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.ui_rezervnoe_kopirovanie), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(text = stringResource(R.string.ui_sokhranite_bazu_dokumentov_i_foto_v_zashifrovann), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.height(20.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f).height(44.dp).bounceClick { showBackupDialog = true }) {
-                        Box(contentAlignment = Alignment.Center) { Text("Создать копию", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
+                        Box(contentAlignment = Alignment.Center) { Text(stringResource(R.string.ui_sozdat_kopiyu), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Surface(
@@ -312,7 +315,7 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1f).height(44.dp).bounceClick { importLauncher.launch(arrayOf("*/*")) }
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Text("Восстановить", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(stringResource(R.string.ui_vosstanovit), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         }
                     }
                 }
@@ -323,12 +326,12 @@ fun SettingsScreen(
     val appearanceBlock = @Composable {
         Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(20.dp)) {
-                Text("Оформление", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.ui_oformlenie), fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Выбор темы (Авто, Светлая, Тёмная)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val themes = listOf("Авто", "Светлая", "Тёмная")
+                    val themes = listOf(stringResource(R.string.ui_avto), stringResource(R.string.ui_svetlaya), stringResource(R.string.ui_tyomnaya))
                     themes.forEachIndexed { index, title ->
                         Surface(
                             shape = RoundedCornerShape(12.dp),
@@ -347,8 +350,8 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Динамические цвета", fontSize = 16.sp)
-                            Text("Палитра подстраивается под обои", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
+                            Text(stringResource(R.string.ui_dinamicheskie_tsveta), fontSize = 16.sp)
+                            Text(stringResource(R.string.ui_palitra_podstraivaetsya_pod_oboi), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
                         }
                         Spacer(modifier = Modifier.width(16.dp))
                         androidx.compose.material3.Switch(
@@ -362,8 +365,8 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Анимации интерфейса", fontSize = 16.sp)
-                        Text("Плавное появление и эффекты пружины", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
+                        Text(stringResource(R.string.ui_animatsii_interfeysa), fontSize = 16.sp)
+                        Text(stringResource(R.string.ui_plavnoe_poyavlenie_i_effekty_pruzhiny), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     androidx.compose.material3.Switch(
@@ -382,23 +385,34 @@ fun SettingsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (isWideScreen) 16.dp else 0.dp)
+                    .then(
+                        if (isWideScreen) Modifier.statusBarsPadding().padding(top = 8.dp)
+                        else Modifier
+                    ),
                 color = MaterialTheme.colorScheme.secondaryContainer,
-                // Скругление остается одинаковым
-                shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
+                shape = if (isWideScreen) RoundedCornerShape(32.dp)
+                else RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
                 shadowElevation = 2.dp
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 80.dp, bottom = 24.dp, start = headerLeftPadding, end = 24.dp),
+                        .padding(
+                            top = if (isWideScreen) 24.dp else 80.dp,
+                            bottom = 24.dp,
+                            start = headerHorizontalPadding,
+                            end = headerHorizontalPadding
+                        ),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = if (isWideScreen) Alignment.Top else Alignment.CenterVertically
                 ) {
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "Настройки",
+                                text = stringResource(R.string.ui_nastroyki),
                                 fontSize = 32.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -406,13 +420,13 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Image(
                                 painter = painterResource(id = R.drawable.settings),
-                                contentDescription = "Иконка настроек",
+                                contentDescription = stringResource(R.string.ui_ikonka_nastroek),
                                 modifier = Modifier.size(30.dp)
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Управление приложением",
+                            text = stringResource(R.string.ui_upravlenie_prilozheniem),
                             fontSize = 18.sp,
                             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
                         )
@@ -428,7 +442,7 @@ fun SettingsScreen(
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Outlined.Info,
-                                contentDescription = "О приложении",
+                                contentDescription = stringResource(R.string.ui_o_prilozhenii),
                                 tint = MaterialTheme.colorScheme.onPrimary
                             )
                         }
@@ -499,15 +513,15 @@ fun SettingsScreen(
         var passwordInput by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showBackupDialog = false },
-            title = { Text("Пароль архива") },
+            title = { Text(stringResource(R.string.ui_parol_arkhiva)) },
             text = {
                 Column {
-                    Text("Придумайте пароль. Он нужен для шифрования данных. Без него вы не сможете восстановить копию.", fontSize = 14.sp)
+                    Text(stringResource(R.string.ui_pridumayte_parol_on_nuzhen_dlya_shifrovaniya_dan), fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = passwordInput,
                         onValueChange = { passwordInput = it },
-                        label = { Text("Пароль") },
+                        label = { Text(stringResource(R.string.ui_parol)) },
                         singleLine = true,
                         visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
@@ -522,10 +536,10 @@ fun SettingsScreen(
                         showBackupDialog = false
                         exportLauncher.launch("MyDoc_Backup.zip")
                     }
-                }) { Text("Далее") }
+                }) { Text(stringResource(R.string.ui_dalee)) }
             },
             dismissButton = {
-                TextButton(onClick = { showBackupDialog = false }) { Text("Отмена") }
+                TextButton(onClick = { showBackupDialog = false }) { Text(stringResource(R.string.ui_otmena)) }
             }
         )
     }
@@ -534,15 +548,15 @@ fun SettingsScreen(
         var restorePasswordInput by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { showRestoreDialog = false; selectedRestoreUri = null },
-            title = { Text("Восстановление") },
+            title = { Text(stringResource(R.string.ui_vosstanovlenie)) },
             text = {
                 Column {
-                    Text("Введите пароль, который вы указывали при создании этой резервной копии.", fontSize = 14.sp)
+                    Text(stringResource(R.string.ui_vvedite_parol_kotoryy_vy_ukazyvali_pri_sozdanii), fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = restorePasswordInput,
                         onValueChange = { restorePasswordInput = it },
-                        label = { Text("Пароль") },
+                        label = { Text(stringResource(R.string.ui_parol)) },
                         singleLine = true,
                         visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
@@ -554,22 +568,22 @@ fun SettingsScreen(
                 TextButton(onClick = {
                     if (restorePasswordInput.isNotBlank() && selectedRestoreUri != null) {
                         showRestoreDialog = false
-                        android.widget.Toast.makeText(context, "Восстановление...", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(context, context.getString(R.string.ui_vosstanovlenie_2), android.widget.Toast.LENGTH_SHORT).show()
                         try { com.poltorashka.documents.data.AppDatabase.getDatabase(context).close() } catch (e: Exception) { e.printStackTrace() }
                         viewModel.restoreBackup(context, selectedRestoreUri!!, restorePasswordInput) { success ->
                             if (success) {
-                                android.widget.Toast.makeText(context, "Данные восстановлены успешно!", android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(context, context.getString(R.string.ui_dannye_vosstanovleny_uspeshno), android.widget.Toast.LENGTH_LONG).show()
                                 kotlin.concurrent.thread { Thread.sleep(1500); Runtime.getRuntime().exit(0) }
                             } else {
-                                android.widget.Toast.makeText(context, "Ошибка! Неверный пароль или файл поврежден.", android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(context, context.getString(R.string.ui_oshibka_nevernyy_parol_ili_fayl_povrezhden), android.widget.Toast.LENGTH_LONG).show()
                             }
                             selectedRestoreUri = null
                         }
                     }
-                }) { Text("Восстановить") }
+                }) { Text(stringResource(R.string.ui_vosstanovit)) }
             },
             dismissButton = {
-                TextButton(onClick = { showRestoreDialog = false; selectedRestoreUri = null }) { Text("Отмена") }
+                TextButton(onClick = { showRestoreDialog = false; selectedRestoreUri = null }) { Text(stringResource(R.string.ui_otmena)) }
             }
         )
     }
@@ -609,13 +623,13 @@ fun SettingsScreen(
 
                         Image(
                             painter = painterResource(id = R.drawable.lock),
-                            contentDescription = "Блокировка",
+                            contentDescription = stringResource(R.string.ui_blokirovka),
                             modifier = Modifier.size(56.dp)
                         )
 
                         Spacer(modifier = Modifier.height(24.dp))
                         Text(
-                            text = if (isError) "PIN-коды не совпадают" else if (isConfirmMode) "Повторите PIN-код" else "Создайте PIN-код",
+                            text = if (isError) stringResource(R.string.ui_pin_kody_ne_sovpadayut) else if (isConfirmMode) stringResource(R.string.ui_povtorite_pin_kod) else stringResource(R.string.ui_sozdayte_pin_kod),
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground
@@ -642,7 +656,7 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.height(24.dp))
                         TextButton(onClick = { showPinSetupDialog = false; isPinEnabledState = false }, modifier = Modifier.padding(bottom = 24.dp)) {
-                            Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
+                            Text(stringResource(R.string.ui_otmena), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
                         }
                     }
                 }
@@ -654,10 +668,10 @@ fun SettingsScreen(
         var folderNameInput by remember { mutableStateOf(folderToEdit?.name ?: "") }
         AlertDialog(
             onDismissRequest = { showAddDialog = false; folderToEdit = null },
-            title = { Text(if (folderToEdit != null) "Изменить папку" else "Новая папка") },
+            title = { Text(if (folderToEdit != null) stringResource(R.string.ui_izmenit_papku) else stringResource(R.string.ui_novaya_papka)) },
             text = {
                 OutlinedTextField(
-                    value = folderNameInput, onValueChange = { folderNameInput = it }, label = { Text("Введите название папки") }, singleLine = true
+                    value = folderNameInput, onValueChange = { folderNameInput = it }, label = { Text(stringResource(R.string.ui_vvedite_nazvanie_papki)) }, singleLine = true
                 )
             },
             confirmButton = {
@@ -667,10 +681,10 @@ fun SettingsScreen(
                         else viewModel.addFolder(folderNameInput)
                     }
                     showAddDialog = false; folderToEdit = null
-                }) { Text("Сохранить") }
+                }) { Text(stringResource(R.string.ui_sokhranit)) }
             },
             dismissButton = {
-                TextButton(onClick = { showAddDialog = false; folderToEdit = null }) { Text("Отмена") }
+                TextButton(onClick = { showAddDialog = false; folderToEdit = null }) { Text(stringResource(R.string.ui_otmena)) }
             }
         )
     }
@@ -678,12 +692,12 @@ fun SettingsScreen(
     if (folderToDelete != null) {
         AlertDialog(
             onDismissRequest = { folderToDelete = null },
-            title = { Text("Удалить папку?") },
-            text = { Text("Папка «${folderToDelete?.name}» и все документы внутри неё будут удалены навсегда.") },
+            title = { Text(stringResource(R.string.ui_udalit_papku)) },
+            text = { Text(stringResource(R.string.folder_delete_message, folderToDelete?.name.orEmpty())) },
             confirmButton = {
-                TextButton(onClick = { viewModel.deleteFolder(folderToDelete!!.id); folderToDelete = null }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = { viewModel.deleteFolder(folderToDelete!!.id); folderToDelete = null }) { Text(stringResource(R.string.ui_udalit), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { folderToDelete = null }) { Text("Отмена") } }
+            dismissButton = { TextButton(onClick = { folderToDelete = null }) { Text(stringResource(R.string.ui_otmena)) } }
         )
     }
 }
@@ -703,10 +717,10 @@ fun CustomSwipeToRevealItem(
             horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onEdit, modifier = Modifier.background(MaterialTheme.colorScheme.primaryContainer, CircleShape)) {
-                Icon(Icons.Filled.Edit, contentDescription = "Изменить", tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.ui_izmenit), tint = MaterialTheme.colorScheme.onPrimaryContainer)
             }
             IconButton(onClick = onDelete, modifier = Modifier.background(MaterialTheme.colorScheme.errorContainer, CircleShape)) {
-                Icon(Icons.Filled.Delete, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.onErrorContainer)
+                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.ui_udalit), tint = MaterialTheme.colorScheme.onErrorContainer)
             }
         }
         ElevatedCard(
@@ -720,7 +734,7 @@ fun CustomSwipeToRevealItem(
         ) {
             Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(folder.name, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                Icon(Icons.Filled.Menu, contentDescription = "Перетащить", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Icon(Icons.Filled.Menu, contentDescription = stringResource(R.string.ui_peretashchit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

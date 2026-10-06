@@ -34,6 +34,7 @@ import com.poltorashka.documents.data.DocumentTemplates
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
+import androidx.compose.ui.res.stringResource
 
 private fun saveEncryptedFile(context: Context, uri: Uri): String? {
     val mimeType = context.contentResolver.getType(uri)
@@ -64,7 +65,7 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
     var expanded by remember { mutableStateOf(false) }
 
     val documentTypes = DocumentTemplates.supportedDocumentTypes
-    var selectedType by remember { mutableStateOf(documentTypes[0]) }
+    var selectedType by remember { mutableStateOf(documentTypes.first().storageValue) }
 
     val inputValues = remember { mutableStateMapOf<String, String>() }
     val currentFields = DocumentTemplates.getFieldsForType(selectedType)
@@ -92,9 +93,9 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Новый документ") },
+                title = { Text(stringResource(R.string.ui_novyy_dokument)) },
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад") }
+                    IconButton(onClick = onBackClick) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.ui_nazad)) }
                 }
             )
         },
@@ -108,7 +109,7 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
 
                         // Перед сохранением в БД превращает цифры в дату
                         val formattedFields = inputValues.mapValues { (key, value) ->
-                            if (key.contains("Дата", ignoreCase = true)) value.toDateString() else value
+                            if (DocumentTemplates.isDateField(key)) value.toDateString() else value
                         }
 
                         val newDocument = DocumentEntity(
@@ -128,7 +129,7 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                     .imePadding()
                     .padding(16.dp)
                     .height(50.dp)
-            ) { Text("Сохранить") }
+            ) { Text(stringResource(R.string.ui_sokhranit)) }
         }
     ) { paddingValues ->
         Column(
@@ -143,10 +144,11 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                 onExpandedChange = { expanded = it }
             ) {
                 OutlinedTextField(
-                    value = selectedType,
+                    value = documentTypes.firstOrNull { it.storageValue == selectedType }
+                        ?.let { stringResource(it.labelRes) } ?: selectedType,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Тип документа") },
+                    label = { Text(stringResource(R.string.ui_tip_dokumenta)) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                     modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                 )
@@ -156,8 +158,8 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                 ) {
                     documentTypes.forEach { selectionOption ->
                         DropdownMenuItem(
-                            text = { Text(selectionOption) },
-                            onClick = { selectedType = selectionOption; expanded = false; inputValues.clear() }
+                            text = { Text(stringResource(selectionOption.labelRes)) },
+                            onClick = { selectedType = selectionOption.storageValue; expanded = false; inputValues.clear() }
                         )
                     }
                 }
@@ -166,7 +168,7 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
             Spacer(modifier = Modifier.height(16.dp))
 
             // Поле ввода для Эмодзи-тега ---
-            val currentTag = inputValues["Тег"] ?: ""
+            val currentTag = inputValues[DocumentTemplates.tagFieldKey] ?: ""
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -192,19 +194,19 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                     value = currentTag,
                     onValueChange = { newValue ->
                         if (newValue.isEmpty()) {
-                            inputValues["Тег"] = ""
+                            inputValues[DocumentTemplates.tagFieldKey] = ""
                         } else {
                             // Удаляет обычный текст, цифры и пунктуацию
                             val filtered = newValue.replace(Regex("[A-Za-zА-Яа-я0-9\\s\\.,!?\\-()'\"#@]"), "")
                             if (filtered.isNotEmpty()) {
                                 // Ровно 1 символ включая сложные смайлики
                                 val codePoint = filtered.codePointAt(0)
-                                inputValues["Тег"] = String(Character.toChars(codePoint))
+                                inputValues[DocumentTemplates.tagFieldKey] = String(Character.toChars(codePoint))
                             }
                         }
                     },
-                    label = { Text("Эмодзи-тег") },
-                    placeholder = { Text("Например: 🚗") },
+                    label = { Text(stringResource(R.string.ui_emodzi_teg)) },
+                    placeholder = { Text(stringResource(R.string.ui_naprimer)) },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
@@ -216,21 +218,21 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    rowFields.forEach { fieldLabel ->
-                        val isDateField = fieldLabel.contains("Дата", ignoreCase = true)
+                    rowFields.forEach { field ->
+                        val isDateField = DocumentTemplates.isDateField(field.storageKey)
 
                         OutlinedTextField(
-                            value = inputValues[fieldLabel] ?: "",
+                            value = inputValues[field.storageKey] ?: "",
                             onValueChange = { newValue ->
                                 if (isDateField) {
                                     // Только цифры и не больше 8
                                     val digits = newValue.filter { it.isDigit() }.take(8)
-                                    inputValues[fieldLabel] = digits
+                                    inputValues[field.storageKey] = digits
                                 } else {
-                                    inputValues[fieldLabel] = newValue
+                                    inputValues[field.storageKey] = newValue
                                 }
                             },
-                            label = { Text(fieldLabel) },
+                            label = { Text(stringResource(field.labelRes)) },
                             // Маска и цифровая клавиатура для дат
                             visualTransformation = if (isDateField) DateTransformation() else VisualTransformation.None,
                             keyboardOptions = if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
@@ -251,7 +253,7 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
             OutlinedButton(
                 onClick = { filePickerLauncher.launch(arrayOf("image/*", "application/pdf")) },
                 modifier = Modifier.fillMaxWidth().height(50.dp)
-            ) { Text("Добавить файлы (${selectedImages.size})") }
+            ) { Text(stringResource(R.string.files_add_count, selectedImages.size)) }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -269,7 +271,7 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                             modifier = Modifier.align(Alignment.TopEnd)
                         ) {
                             Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.errorContainer) {
-                                Icon(Icons.Filled.Close, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.onErrorContainer)
+                                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.ui_udalit), tint = MaterialTheme.colorScheme.onErrorContainer)
                             }
                         }
                     }

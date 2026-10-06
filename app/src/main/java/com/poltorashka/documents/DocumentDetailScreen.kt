@@ -76,6 +76,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
+import androidx.compose.ui.res.stringResource
 
 private fun saveEncryptedFile(context: Context, uri: Uri): String? {
     val mimeType = context.contentResolver.getType(uri)
@@ -126,7 +127,7 @@ private fun openFileExternally(context: Context, path: String) {
         context.startActivity(intent)
 
     } catch (e: Exception) {
-        Toast.makeText(context, "Ошибка при открытии файла: ${e.message}", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, context.getString(R.string.document_open_error, e.message.orEmpty()), Toast.LENGTH_LONG).show()
     }
 }
 
@@ -156,13 +157,13 @@ fun DecryptedAsyncImage(
     if (imageBytes != null) {
         AsyncImage(
             model = imageBytes,
-            contentDescription = "Расшифрованный скан",
+            contentDescription = stringResource(R.string.ui_rasshifrovannyy_skan),
             modifier = finalModifier,
             contentScale = contentScale
         )
     } else if (hasError) {
         Box(modifier = finalModifier.background(MaterialTheme.colorScheme.errorContainer), contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Close, contentDescription = "Ошибка", tint = MaterialTheme.colorScheme.onErrorContainer)
+            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.ui_oshibka), tint = MaterialTheme.colorScheme.onErrorContainer)
         }
     } else {
         Box(modifier = finalModifier.background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
@@ -206,7 +207,7 @@ fun DocumentDetailScreen(
             document?.fieldsData?.let { data ->
                 editedFields.clear()
                 data.forEach { (key, value) ->
-                    if (key.contains("Дата", ignoreCase = true)) {
+                    if (com.poltorashka.documents.data.DocumentTemplates.isDateField(key)) {
                         editedFields[key] = value.filter { it.isDigit() }
                     } else {
                         editedFields[key] = value
@@ -232,25 +233,25 @@ fun DocumentDetailScreen(
     if (imageToDelete != null) {
         AlertDialog(
             onDismissRequest = { imageToDelete = null },
-            title = { Text("Удалить файл?") },
-            text = { Text("Это действие нельзя будет отменить.") },
+            title = { Text(stringResource(R.string.ui_udalit_fayl)) },
+            text = { Text(stringResource(R.string.ui_eto_deystvie_nelzya_budet_otmenit)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         document?.let { doc -> viewModel.removePhoto(doc, imageToDelete!!) }
                         imageToDelete = null
                     }
-                ) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+                ) { Text(stringResource(R.string.ui_udalit), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { imageToDelete = null }) { Text("Отмена") } }
+            dismissButton = { TextButton(onClick = { imageToDelete = null }) { Text(stringResource(R.string.ui_otmena)) } }
         )
     }
 
     if (showDeleteDocDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDocDialog = false },
-            title = { Text("Удалить документ?") },
-            text = { Text("Документ и все прикрепленные к нему файлы будут удалены без возможности восстановления.") },
+            title = { Text(stringResource(R.string.ui_udalit_dokument)) },
+            text = { Text(stringResource(R.string.ui_dokument_i_vse_prikreplennye_k_nemu_fayly_budut)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -259,9 +260,9 @@ fun DocumentDetailScreen(
                         }
                         showDeleteDocDialog = false
                     }
-                ) { Text("Удалить навсегда", color = MaterialTheme.colorScheme.error) }
+                ) { Text(stringResource(R.string.ui_udalit_navsegda), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { showDeleteDocDialog = false }) { Text("Отмена") } }
+            dismissButton = { TextButton(onClick = { showDeleteDocDialog = false }) { Text(stringResource(R.string.ui_otmena)) } }
         )
     }
 
@@ -274,7 +275,10 @@ fun DocumentDetailScreen(
                 shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
                 shadowElevation = 2.dp
             ) {
-                val titleText = if (isEditing) "Редактирование" else (document?.documentType?.replace(" о ", " о\u00A0") ?: "Загрузка...")
+                val titleText = if (isEditing) stringResource(R.string.ui_redaktirovanie) else document?.let {
+                    com.poltorashka.documents.data.DocumentTemplates.documentTypeLabel(it.documentType, context.resources)
+                        .replace(" о ", " о\u00A0")
+                } ?: stringResource(R.string.ui_zagruzka)
 
                 // --- ИЗМЕНЕНО: Адаптивная шапка ---
                 if (isWideScreen) {
@@ -290,7 +294,7 @@ fun DocumentDetailScreen(
                             modifier = Modifier.size(44.dp).bounceClick { if (isEditing) isEditing = false else onBackClick() }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(if (isEditing) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack, contentDescription = if (isEditing) "Отмена" else "Назад", tint = MaterialTheme.colorScheme.onSurface)
+                                Icon(if (isEditing) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack, contentDescription = if (isEditing) stringResource(R.string.ui_otmena) else stringResource(R.string.ui_nazad), tint = MaterialTheme.colorScheme.onSurface)
                             }
                         }
 
@@ -305,15 +309,15 @@ fun DocumentDetailScreen(
 
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (isEditing) {
-                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.height(44.dp).bounceClick { val formattedFields = editedFields.mapValues { (key, value) -> if (key.contains("Дата", ignoreCase = true)) value.toDateString() else value }; document?.let { doc -> viewModel.updateFields(doc, formattedFields) }; isEditing = false }) {
-                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) { Text("Сохранить", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary) }
+                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.height(44.dp).bounceClick { val formattedFields = editedFields.mapValues { (key, value) -> if (com.poltorashka.documents.data.DocumentTemplates.isDateField(key)) value.toDateString() else value }; document?.let { doc -> viewModel.updateFields(doc, formattedFields) }; isEditing = false }) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) { Text(stringResource(R.string.ui_sokhranit), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary) }
                                 }
                             } else {
                                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp).bounceClick { showDeleteDocDialog = true }) {
-                                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Delete, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
+                                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.ui_udalit), tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
                                 }
                                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp).bounceClick { isEditing = true }) {
-                                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Edit, contentDescription = "Редактировать", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
+                                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.ui_redaktirovat), tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
                                 }
                             }
                         }
@@ -331,21 +335,21 @@ fun DocumentDetailScreen(
                                 modifier = Modifier.align(Alignment.CenterStart).size(44.dp).bounceClick { if (isEditing) isEditing = false else onBackClick() }
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(if (isEditing) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack, contentDescription = if (isEditing) "Отмена" else "Назад", tint = MaterialTheme.colorScheme.onSurface)
+                                    Icon(if (isEditing) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack, contentDescription = if (isEditing) stringResource(R.string.ui_otmena) else stringResource(R.string.ui_nazad), tint = MaterialTheme.colorScheme.onSurface)
                                 }
                             }
 
                             Row(modifier = Modifier.align(Alignment.CenterEnd), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 if (isEditing) {
-                                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.height(44.dp).bounceClick { val formattedFields = editedFields.mapValues { (key, value) -> if (key.contains("Дата", ignoreCase = true)) value.toDateString() else value }; document?.let { doc -> viewModel.updateFields(doc, formattedFields) }; isEditing = false }) {
-                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) { Text("Сохранить", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary) }
+                                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.height(44.dp).bounceClick { val formattedFields = editedFields.mapValues { (key, value) -> if (com.poltorashka.documents.data.DocumentTemplates.isDateField(key)) value.toDateString() else value }; document?.let { doc -> viewModel.updateFields(doc, formattedFields) }; isEditing = false }) {
+                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) { Text(stringResource(R.string.ui_sokhranit), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary) }
                                     }
                                 } else {
                                     Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp).bounceClick { showDeleteDocDialog = true }) {
-                                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Delete, contentDescription = "Удалить", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
+                                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.ui_udalit), tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
                                     }
                                     Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp).bounceClick { isEditing = true }) {
-                                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Edit, contentDescription = "Редактировать", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
+                                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.ui_redaktirovat), tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
                                     }
                                 }
                             }
@@ -371,16 +375,16 @@ fun DocumentDetailScreen(
                         .size(64.dp)
                         .bounceClick {
                             val doc = document!!
-                            val orderedLabels = com.poltorashka.documents.data.DocumentTemplates.getFieldsForType(doc.documentType)
+                            val orderedLabels = com.poltorashka.documents.data.DocumentTemplates.getFieldsForType(doc.documentType).map { it.storageKey }
                             val extraLabels = doc.fieldsData.keys.filter { !orderedLabels.contains(it) }
                             val finalLabels = orderedLabels + extraLabels
 
                             val shareText = StringBuilder().apply {
-                                append("${doc.documentType}\n\n")
+                                append("${com.poltorashka.documents.data.DocumentTemplates.documentTypeLabel(doc.documentType, context.resources)}\n\n")
                                 finalLabels.forEach { key ->
                                     val value = doc.fieldsData[key]
                                     if (!value.isNullOrBlank()) {
-                                        append("$key: $value\n")
+                                        append("${com.poltorashka.documents.data.DocumentTemplates.fieldLabel(key, context.resources)}: $value\n")
                                     }
                                 }
                             }.toString()
@@ -389,13 +393,13 @@ fun DocumentDetailScreen(
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, shareText)
                             }
-                            context.startActivity(Intent.createChooser(intent, "Поделиться документом"))
+                            context.startActivity(Intent.createChooser(intent, context.getString(R.string.ui_podelitsya_dokumentom)))
                         }
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Filled.Share,
-                            contentDescription = "Поделиться",
+                            contentDescription = stringResource(R.string.ui_podelitsya),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.size(28.dp)
                         )
@@ -418,14 +422,14 @@ fun DocumentDetailScreen(
                     shape = RoundedCornerShape(28.dp)
                 ) {
                     Column(modifier = Modifier.padding(20.dp)) {
-                        val orderedLabels = com.poltorashka.documents.data.DocumentTemplates.getFieldsForType(doc.documentType)
+                        val orderedLabels = com.poltorashka.documents.data.DocumentTemplates.getFieldsForType(doc.documentType).map { it.storageKey }
                         val extraLabels = doc.fieldsData.keys.filter { !orderedLabels.contains(it) }
                         val finalLabels = orderedLabels + extraLabels
 
-                        val displayLabels = finalLabels.filter { it != "Тег" }
+                        val displayLabels = finalLabels.filter { it != com.poltorashka.documents.data.DocumentTemplates.tagFieldKey }
 
                         if (isEditing) {
-                            val currentTag = editedFields["Тег"] ?: ""
+                            val currentTag = editedFields[com.poltorashka.documents.data.DocumentTemplates.tagFieldKey] ?: ""
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -448,17 +452,17 @@ fun DocumentDetailScreen(
                                     value = currentTag,
                                     onValueChange = { newValue ->
                                         if (newValue.isEmpty()) {
-                                            editedFields["Тег"] = ""
+                                            editedFields[com.poltorashka.documents.data.DocumentTemplates.tagFieldKey] = ""
                                         } else {
                                             val filtered = newValue.replace(Regex("[A-Za-zА-Яа-я0-9\\s\\.,!?\\-()'\"#@]"), "")
                                             if (filtered.isNotEmpty()) {
                                                 val codePoint = filtered.codePointAt(0)
-                                                editedFields["Тег"] = String(Character.toChars(codePoint))
+                                                editedFields[com.poltorashka.documents.data.DocumentTemplates.tagFieldKey] = String(Character.toChars(codePoint))
                                             }
                                         }
                                     },
-                                    label = { Text("Эмодзи-тег") },
-                                    placeholder = { Text("Например: 🚗") },
+                                    label = { Text(stringResource(R.string.ui_emodzi_teg)) },
+                                    placeholder = { Text(stringResource(R.string.ui_naprimer)) },
                                     singleLine = true,
                                     modifier = Modifier.weight(1f)
                                 )
@@ -470,7 +474,7 @@ fun DocumentDetailScreen(
                                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
                                     rowLabels.forEach { label ->
-                                        val isDateField = label.contains("Дата", ignoreCase = true)
+                                        val isDateField = com.poltorashka.documents.data.DocumentTemplates.isDateField(label)
                                         OutlinedTextField(
                                             value = editedFields[label] ?: "",
                                             onValueChange = { newValue ->
@@ -481,7 +485,7 @@ fun DocumentDetailScreen(
                                                     editedFields[label] = newValue
                                                 }
                                             },
-                                            label = { Text(label) },
+                                            label = { Text(com.poltorashka.documents.data.DocumentTemplates.fieldLabel(label, context.resources)) },
                                             visualTransformation = if (isDateField) DateTransformation() else VisualTransformation.None,
                                             keyboardOptions = if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
                                             modifier = Modifier.weight(1f).padding(bottom = 8.dp)
@@ -505,14 +509,14 @@ fun DocumentDetailScreen(
                                             if (doc.fieldsData.containsKey(label)) {
                                                 val value = doc.fieldsData[label] ?: ""
                                                 DetailField(
-                                                    label = label,
+                                                    label = com.poltorashka.documents.data.DocumentTemplates.fieldLabel(label, context.resources),
                                                     value = value,
                                                     onCopy = { textToCopy ->
                                                         if (textToCopy.isNotBlank()) {
                                                             val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                                            val clip = android.content.ClipData.newPlainText("Скопировано", textToCopy)
+                                                            val clip = android.content.ClipData.newPlainText(context.getString(R.string.ui_skopirovano), textToCopy)
                                                             clipboard.setPrimaryClip(clip)
-                                                            Toast.makeText(context, "Скопировано", Toast.LENGTH_SHORT).show()
+                                                            Toast.makeText(context, context.getString(R.string.ui_skopirovano), Toast.LENGTH_SHORT).show()
                                                         }
                                                     }
                                                 )
@@ -535,7 +539,7 @@ fun DocumentDetailScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Файлы (${doc.photoUris.size})", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.detail_files_count, doc.photoUris.size), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
 
                     Surface(
                         shape = CircleShape,
@@ -545,13 +549,13 @@ fun DocumentDetailScreen(
                             .bounceClick { filePickerLauncher.launch(arrayOf("image/*", "application/pdf")) }
                     ) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 16.dp)) {
-                            Text("+ Добавить", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            Text(stringResource(R.string.ui_dobavit), fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSecondaryContainer)
                         }
                     }
                 }
 
                 if (doc.photoUris.isEmpty()) {
-                    Text("Файлы еще не добавлены", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                    Text(stringResource(R.string.ui_fayly_eshche_ne_dobavleny), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
                 } else {
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -587,7 +591,7 @@ fun FileItem(path: String, onDelete: () -> Unit, onOpen: () -> Unit) {
                 Column(verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(painterResource(id = R.drawable.ic_pdf_file), null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("PDF Документ", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.ui_pdf_dokument), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 }
             } else {
                 DecryptedAsyncImage(path = path, modifier = Modifier.fillMaxSize())

@@ -75,6 +75,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.res.stringResource
 
 @Composable
 fun OnboardingScreen(onFinish: () -> Unit) {
@@ -135,7 +136,7 @@ fun WelcomeStep(onNext: () -> Unit) {
                     Spacer(modifier = Modifier.height(24.dp)) // Уменьшили с 48.dp
 
                     Text(
-                        text = "Здравствуйте!",
+                        text = stringResource(R.string.ui_zdravstvuyte),
                         fontSize = 36.sp,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
@@ -145,7 +146,7 @@ fun WelcomeStep(onNext: () -> Unit) {
 
                     Image(
                         painter = painterResource(id = R.drawable.img_wolf),
-                        contentDescription = "Иллюстрация волка",
+                        contentDescription = stringResource(R.string.ui_illyustratsiya_volka),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(170.dp) // Немного убавили размер волка (был 200.dp)
@@ -184,7 +185,7 @@ fun WelcomeStep(onNext: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "Ваши документы в одном месте",
+                                text = stringResource(R.string.ui_vashi_dokumenty_v_odnom_meste),
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -194,34 +195,34 @@ fun WelcomeStep(onNext: () -> Unit) {
 
                             FeatureItem(
                                 iconRes = R.drawable.ic_shield_check,
-                                title = "Абсолютная безопасность",
-                                description = "Вход по PIN-коду или\u00A0биометрии. Зашифрованные резервные копии."
+                                title = stringResource(R.string.ui_absolyutnaya_bezopasnost),
+                                description = stringResource(R.string.ui_vkhod_po_pin_kodu_ili_biometrii_zashifrovannye_r)
                             )
                             Spacer(modifier = Modifier.height(16.dp)) // Уменьшили с 24.dp
 
                             FeatureItem(
                                 iconRes = R.drawable.ic_family_docs,
-                                title = "Идеальный порядок",
-                                description = "Сортируйте документы по\u00A0папкам, добавляйте теги и\u00A0находите нужное за\u00A0секунду."
+                                title = stringResource(R.string.ui_idealnyy_poryadok),
+                                description = stringResource(R.string.ui_sortiruyte_dokumenty_po_papkam_dobavlyayte_tegi)
                             )
                             Spacer(modifier = Modifier.height(16.dp)) // Уменьшили с 24.dp
 
                             FeatureItem(
                                 iconRes = R.drawable.ic_cloud_off,
-                                title = "Полная независимость",
-                                description = "Никаких серверов. Документы всегда под\u00A0рукой, даже без\u00A0интернета."
+                                title = stringResource(R.string.ui_polnaya_nezavisimost),
+                                description = stringResource(R.string.ui_nikakikh_serverov_dokumenty_vsegda_pod_rukoy_daz)
                             )
 
                             Spacer(modifier = Modifier.height(24.dp)) // Уменьшили с 40.dp
 
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = "Продолжая, вы принимаете условия",
+                                    text = stringResource(R.string.ui_prodolzhaya_vy_prinimaete_usloviya),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = "Политики конфиденциальности",
+                                    text = stringResource(R.string.ui_politiki_konfidentsialnosti),
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold,
@@ -249,7 +250,7 @@ fun WelcomeStep(onNext: () -> Unit) {
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = "Поехали!",
+                                        text = stringResource(R.string.ui_poekhali),
                                         fontSize = 20.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -263,7 +264,7 @@ fun WelcomeStep(onNext: () -> Unit) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Icon(
                                                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                                contentDescription = "Начать",
+                                                contentDescription = stringResource(R.string.ui_nachat),
                                                 tint = MaterialTheme.colorScheme.onPrimary,
                                                 modifier = Modifier.size(24.dp)
                                             )
@@ -366,7 +367,7 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
                     Spacer(modifier = Modifier.height(48.dp))
 
                     Text(
-                        text = "Давайте знакомиться!",
+                        text = stringResource(R.string.ui_davayte_znakomitsya),
                         fontSize = 32.sp,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
@@ -378,12 +379,12 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
                     TextField(
                         value = name,
                         onValueChange = { name = it },
-                        label = { Text("Имя") },
-                        placeholder = { Text("Введите ваше имя") },
+                        label = { Text(stringResource(R.string.ui_imya)) },
+                        placeholder = { Text(stringResource(R.string.ui_vvedite_vashe_imya)) },
                         trailingIcon = {
                             if (name.isNotEmpty()) {
                                 IconButton(onClick = { name = "" }) {
-                                    Icon(Icons.Filled.Clear, contentDescription = "Очистить")
+                                    Icon(Icons.Filled.Clear, contentDescription = stringResource(R.string.ui_ochistit))
                                 }
                             }
                         },
@@ -402,7 +403,7 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Ваше имя нужно для отображения в главном меню приложения.",
+                        text = stringResource(R.string.ui_vashe_imya_nuzhno_dlya_otobrazheniya_v_glavnom_m),
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth(),
@@ -414,7 +415,7 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
 
                     Image(
                         painter = painterResource(id = R.drawable.img_wolf_keyboard),
-                        contentDescription = "Лапки на клавиатуре",
+                        contentDescription = stringResource(R.string.ui_lapki_na_klaviature),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(180.dp),
@@ -444,7 +445,7 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Готово!",
+                                text = stringResource(R.string.ui_gotovo),
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -458,7 +459,7 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                        contentDescription = "Продолжить",
+                                        contentDescription = stringResource(R.string.ui_prodolzhit),
                                         tint = MaterialTheme.colorScheme.onPrimary,
                                         modifier = Modifier.size(24.dp)
                                     )
@@ -471,7 +472,7 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
 
                     // Кнопка восстановления
                     Text(
-                        text = "У меня уже есть резервная копия",
+                        text = stringResource(R.string.ui_u_menya_uzhe_est_rezervnaya_kopiya),
                         fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
@@ -490,15 +491,15 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
     if (showRestoreDialog) {
         AlertDialog(
             onDismissRequest = { showRestoreDialog = false; selectedRestoreUri = null },
-            title = { Text("Восстановление") },
+            title = { Text(stringResource(R.string.ui_vosstanovlenie)) },
             text = {
                 Column {
-                    Text("Введите пароль, который вы указывали при создании этой резервной копии.", fontSize = 14.sp)
+                    Text(stringResource(R.string.ui_vvedite_parol_kotoryy_vy_ukazyvali_pri_sozdanii), fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedTextField(
                         value = restorePasswordInput,
                         onValueChange = { restorePasswordInput = it },
-                        label = { Text("Пароль") },
+                        label = { Text(stringResource(R.string.ui_parol)) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -510,7 +511,7 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
                 TextButton(onClick = {
                     if (restorePasswordInput.isNotBlank() && selectedRestoreUri != null) {
                         showRestoreDialog = false
-                        android.widget.Toast.makeText(context, "Распаковка архива...", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(context, context.getString(R.string.ui_raspakovka_arkhiva), android.widget.Toast.LENGTH_SHORT).show()
 
                         try {
                             com.poltorashka.documents.data.AppDatabase.getDatabase(context).close()
@@ -521,23 +522,23 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
                         scope.launch {
                             val success = com.poltorashka.documents.utils.BackupManager.restoreBackup(context, selectedRestoreUri!!, restorePasswordInput)
                             if (success) {
-                                android.widget.Toast.makeText(context, "Данные восстановлены успешно!", android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(context, context.getString(R.string.ui_dannye_vosstanovleny_uspeshno), android.widget.Toast.LENGTH_LONG).show()
 
                                 kotlin.concurrent.thread {
                                     Thread.sleep(1500)
                                     Runtime.getRuntime().exit(0)
                                 }
                             } else {
-                                android.widget.Toast.makeText(context, "Ошибка! Неверный пароль или файл поврежден.", android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(context, context.getString(R.string.ui_oshibka_nevernyy_parol_ili_fayl_povrezhden), android.widget.Toast.LENGTH_LONG).show()
                             }
                             selectedRestoreUri = null
                             restorePasswordInput = ""
                         }
                     }
-                }) { Text("Восстановить") }
+                }) { Text(stringResource(R.string.ui_vosstanovit)) }
             },
             dismissButton = {
-                TextButton(onClick = { showRestoreDialog = false; selectedRestoreUri = null }) { Text("Отмена") }
+                TextButton(onClick = { showRestoreDialog = false; selectedRestoreUri = null }) { Text(stringResource(R.string.ui_otmena)) }
             }
         )
     }

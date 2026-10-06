@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import bounceClick
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.res.stringResource
 
 @Composable
 fun AboutAppScreen(onBackClick: () -> Unit) {
@@ -80,7 +81,7 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Назад",
+                                contentDescription = stringResource(R.string.ui_nazad),
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
@@ -89,7 +90,7 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
                     Spacer(modifier = Modifier.width(16.dp))
 
                     Text(
-                        text = "О приложении",
+                        text = stringResource(R.string.ui_o_prilozhenii),
                         fontSize = 24.sp, // Чуть меньше для однострочного дизайна
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -113,7 +114,7 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Назад",
+                                contentDescription = stringResource(R.string.ui_nazad),
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
@@ -122,7 +123,7 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
                     Spacer(modifier = Modifier.height(24.dp))
 
                     Text(
-                        text = "О приложении",
+                        text = stringResource(R.string.ui_o_prilozhenii),
                         fontSize = 32.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -153,7 +154,7 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
                     // КАРТИНКА ВОЛКА
                     Image(
                         painter = painterResource(id = R.drawable.sleep_wolf),
-                        contentDescription = "Маскот",
+                        contentDescription = stringResource(R.string.ui_maskot),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(100.dp)
@@ -163,7 +164,7 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "Спасибо, что выбрали «Мои Документы»!\n\nЭтот проект создавался с особым вниманием к деталям и безопасности. Здесь нет облачных серверов, скрытой аналитики или трекеров — все ваши данные остаются строго на вашем устройстве.\n\nНадеюсь, вам так же приятно пользоваться этим приложением, как мне было интересно его разрабатывать 🐺.",
+                        text = stringResource(R.string.ui_spasibo_chto_vybrali_moi_dokumenty_etot_proekt_s),
                         fontSize = 15.sp,
                         lineHeight = 22.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -190,7 +191,7 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.img_avatar),
-                        contentDescription = "Профиль GitHub",
+                        contentDescription = stringResource(R.string.ui_profil_github),
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape),
@@ -207,7 +208,7 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Профиль на GitHub",
+                            text = stringResource(R.string.ui_profil_na_github),
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -242,7 +243,7 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = Icons.Filled.Info,
-                                contentDescription = "Политика конфиденциальности",
+                                contentDescription = stringResource(R.string.ui_politika_konfidentsialnosti),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
@@ -252,13 +253,13 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Политика конфиденциальности",
+                            text = stringResource(R.string.ui_politika_konfidentsialnosti),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "и условия использования",
+                            text = stringResource(R.string.ui_i_usloviya_ispolzovaniya),
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
