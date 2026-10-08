@@ -1,5 +1,7 @@
 package com.poltorashka.documents
 
+import coil.compose.AsyncImage
+
 import android.os.Bundle
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -8,7 +10,8 @@ import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -29,14 +32,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -56,9 +63,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import bounceClick
 import com.poltorashka.documents.data.AppDatabase
+import com.poltorashka.documents.utils.BackupManager
 import com.poltorashka.documents.ui.theme.DocumentsTheme
+import com.poltorashka.documents.ui.theme.HomeTitleFontFamily
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 import java.util.Calendar
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import com.poltorashka.documents.data.ReorderScreen
@@ -106,6 +118,7 @@ class MainActivity : FragmentActivity() {
     @OptIn(ExperimentalFoundationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        BackupManager.recoverInterruptedRestores(this)
 
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
@@ -120,11 +133,14 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             val context = LocalContext.current
-            val prefs = remember { UserPreferences(context) }
+            val resources = LocalResources.current
+            val prefs = remember { UserPreferences.getInstance(context) }
+            val themeMode by prefs.themeModeFlow.collectAsState()
+            val dynamicColor by prefs.dynamicColorFlow.collectAsState()
 
             DocumentsTheme(
-                themeMode = prefs.themeMode,
-                dynamicColor = prefs.useDynamicColor
+                themeMode = themeMode,
+                dynamicColor = dynamicColor
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -160,11 +176,6 @@ class MainActivity : FragmentActivity() {
                             lifecycleOwner.lifecycle.removeObserver(observer)
                         }
                     }
-
-                    val db = AppDatabase.getDatabase(context)
-                    val viewModel: DocumentsViewModel = viewModel(
-                        factory = DocumentsViewModelFactory(db.documentDao(), db.folderDao())
-                    )
 
                     val navController = rememberNavController()
                     val startScreen = if (!prefs.isOnboardingCompleted) "onboarding" else if (prefs.isPinEnabled) "auth" else "main"
@@ -206,19 +217,51 @@ class MainActivity : FragmentActivity() {
                             }
 
                             composable("main") {
+                                var attachmentsReady by remember { mutableStateOf(false) }
+                                LaunchedEffect(Unit) {
+                                    try {
+                                        withContext(Dispatchers.IO) {
+                                            DatabaseMigrator.encryptExistingPhotos(context)
+                                            AppDatabase.getDatabase(context).recoverOrphanDocuments(context)
+                                        }
+                                    } finally {
+                                        attachmentsReady = true
+                                    }
+                                }
+                                if (!attachmentsReady) {
+                                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator()
+                                    }
+                                } else {
+                                val db = AppDatabase.getDatabase(context)
+                                val viewModel: DocumentsViewModel = viewModel(
+                                    factory = DocumentsViewModelFactory(db.documentDao(), db.folderDao())
+                                )
                                 val pagerState = rememberPagerState(pageCount = { 3 })
+                                var retainedPageCount by remember { mutableIntStateOf(0) }
+                                LaunchedEffect(pagerState) {
+                                    // Paint the home screen before preparing the two other tabs.
+                                    withFrameNanos { }
+                                    withFrameNanos { }
+                                    snapshotFlow { pagerState.isScrollInProgress }.first { !it }
+                                    retainedPageCount = 2
+                                }
                                 val coroutineScope = rememberCoroutineScope()
                                 val configuration = androidx.compose.ui.platform.LocalConfiguration.current
                                 val isWideScreen = configuration.screenWidthDp >= 600
                                 var isRailExpanded by rememberSaveable { mutableStateOf(false) }
                                 val handleAddClick: () -> Unit = {
-                                    if (pagerState.currentPage == 0) {
-                                        val activeFolderId = viewModel.selectedFolderId.value ?: viewModel.folders.value.firstOrNull()?.id
+                                    coroutineScope.launch(Dispatchers.Main.immediate) {
+                                        val activeFolderId = viewModel.activeFolderId()
                                         if (activeFolderId != null) {
                                             navController.navigate("add/$activeFolderId")
+                                        } else {
+                                            pagerState.animateScrollToPage(2)
+                                            android.widget.Toast.makeText(
+                                                context, resources.getString(R.string.create_folder_first),
+                                                android.widget.Toast.LENGTH_LONG
+                                            ).show()
                                         }
-                                    } else {
-                                        navController.navigate("add/0")
                                     }
                                 }
 
@@ -237,12 +280,13 @@ class MainActivity : FragmentActivity() {
 
                                         HorizontalPager(
                                             state = pagerState,
+                                            beyondViewportPageCount = retainedPageCount,
                                             modifier = Modifier.weight(1f).fillMaxHeight(),
                                             userScrollEnabled = true
                                         ) { page ->
                                             when (page) {
-                                                0 -> MainScreen(onDocumentClick = { id -> navController.navigate("detail/$id") }, onAddClick = { folderId -> navController.navigate("add/$folderId") }, onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } }, onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } }, onReorderClick = { navController.navigate("reorder") }, viewModel = viewModel, availableWidthDp = configuration.screenWidthDp - (if (isRailExpanded) 256 else 80))
-                                                1 -> SearchScreen(onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } }, onAddClick = { navController.navigate("add/0") }, onDocumentClick = { id -> navController.navigate("detail/$id") }, isWideLayout = true)
+                                                0 -> MainScreen(onDocumentClick = { id -> navController.navigate("detail/$id") }, onAddClick = { handleAddClick() }, onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } }, onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } }, onReorderClick = { navController.navigate("reorder") }, viewModel = viewModel, availableWidthDp = configuration.screenWidthDp - (if (isRailExpanded) 256 else 80))
+                                                1 -> SearchScreen(onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } }, onAddClick = handleAddClick, onDocumentClick = { id -> navController.navigate("detail/$id") }, isWideLayout = true, viewModel = viewModel)
                                                 2 -> SettingsScreen(onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } }, onAboutClick = { navController.navigate("about") }, isWideLayout = configuration.screenWidthDp - (if (isRailExpanded) 256 else 80) >= 520)
                                             }
                                         }
@@ -252,13 +296,14 @@ class MainActivity : FragmentActivity() {
                                     Box(modifier = Modifier.fillMaxSize()) {
                                         HorizontalPager(
                                             state = pagerState,
+                                            beyondViewportPageCount = retainedPageCount,
                                             modifier = Modifier.fillMaxSize(),
                                             userScrollEnabled = true
                                         ) { page ->
                                             when (page) {
                                                 0 -> MainScreen(
                                                     onDocumentClick = { id -> navController.navigate("detail/$id") },
-                                                    onAddClick = { folderId -> navController.navigate("add/$folderId") },
+                                                    onAddClick = { handleAddClick() },
                                                     onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
                                                     onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
                                                     onReorderClick = { navController.navigate("reorder") },
@@ -268,8 +313,9 @@ class MainActivity : FragmentActivity() {
                                                     onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
                                                     onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
                                                     onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
-                                                    onAddClick = { navController.navigate("add/0") },
-                                                    onDocumentClick = { id -> navController.navigate("detail/$id") }
+                                                    onAddClick = handleAddClick,
+                                                    onDocumentClick = { id -> navController.navigate("detail/$id") },
+                                                    viewModel = viewModel
                                                 )
                                                 2 -> SettingsScreen(
                                                     onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
@@ -291,11 +337,12 @@ class MainActivity : FragmentActivity() {
                                         }
                                     }
                                 }
+                                }
                             }
 
                             composable("auth") {
                                 AuthScreen(
-                                    correctPin = prefs.appPin,
+                                    verifyPin = prefs::verifyPin,
                                     isBiometricEnabled = prefs.isBiometricEnabled,
                                     onSuccess = {
                                         prefs.backgroundTimestamp = System.currentTimeMillis()
@@ -305,12 +352,25 @@ class MainActivity : FragmentActivity() {
                             }
 
                             composable("about") {
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                                    DisposableEffect(Unit) {
+                                        val wasContrastEnforced = window.isNavigationBarContrastEnforced
+                                        window.isNavigationBarContrastEnforced = false
+                                        onDispose { window.isNavigationBarContrastEnforced = wasContrastEnforced }
+                                    }
+                                }
                                 AboutAppScreen(
                                     onBackClick = { navController.popBackStack() }
                                 )
                             }
 
-                            composable("reorder") {
+                            composable("reorder") { backStackEntry ->
+                                val mainEntry = remember(backStackEntry, navController) { navController.getBackStackEntry("main") }
+                                val db = AppDatabase.getDatabase(context)
+                                val viewModel: DocumentsViewModel = viewModel(
+                                    viewModelStoreOwner = mainEntry,
+                                    factory = DocumentsViewModelFactory(db.documentDao(), db.folderDao())
+                                )
                                 ReorderScreen(
                                     onBackClick = { navController.popBackStack() },
                                     viewModel = viewModel
@@ -343,7 +403,7 @@ class MainActivity : FragmentActivity() {
                                 color = MaterialTheme.colorScheme.background
                             ) {
                                 AuthScreen(
-                                    correctPin = prefs.appPin,
+                                    verifyPin = prefs::verifyPin,
                                     isBiometricEnabled = prefs.isBiometricEnabled,
                                     onSuccess = {
                                         isTimeoutLocked = false
@@ -375,13 +435,16 @@ fun MainScreen(
     val docs by viewModel.documents.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
-    val activeFolderId = manualSelectedId ?: folders.firstOrNull()?.id
+    val activeFolderId = manualSelectedId?.takeIf { id -> folders.any { it.id == id } }
+        ?: folders.firstOrNull()?.id
     val folderSelectionPulse = remember { Animatable(0f) }
     var pulsingFolderId by remember { mutableStateOf<Int?>(null) }
     val selectionAnimationScope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
-    val prefs = remember { UserPreferences(context) }
-    val userName = prefs.userName
+    val prefs = remember { UserPreferences.getInstance(context) }
+    val userName by prefs.userNameFlow.collectAsState()
+    val animationsEnabled by prefs.animationsEnabledFlow.collectAsState()
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isWideLayout = availableWidthDp != null
 
@@ -459,27 +522,18 @@ fun MainScreen(
         amounts
     }
     val gridState = rememberLazyGridState()
-    val collapseThresholdPx = with(LocalDensity.current) { 36.dp.toPx() }
-    val shouldCollapseHeader by remember(gridState, collapseThresholdPx) {
-        derivedStateOf {
-            gridState.firstVisibleItemIndex > 0 ||
-                gridState.firstVisibleItemScrollOffset > collapseThresholdPx
-        }
-    }
-    val headerCollapseFraction by animateFloatAsState(
-        targetValue = if (shouldCollapseHeader) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "headerCollapse"
-    )
+    val emptyScrollState = rememberScrollState()
+    val headerScrollBehavior = rememberHeaderScrollBehavior(if (isWideLayout) 72.dp else 112.dp)
+    val headerCollapseFraction = headerScrollBehavior.state.collapsedFraction
 
     LaunchedEffect(activeFolderId) {
+        headerScrollBehavior.state.heightOffset = 0f
+        headerScrollBehavior.state.contentOffset = 0f
         gridState.scrollToItem(0)
     }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(headerScrollBehavior.nestedScrollConnection),
         containerColor = Color.Transparent,
         topBar = {
             Surface(
@@ -491,17 +545,18 @@ fun MainScreen(
                         else Modifier
                     ),
                 color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = if (isWideLayout) RoundedCornerShape(32.dp)
-                else RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
+                shape = if (isWideLayout) RoundedCornerShape(HeaderCornerRadius)
+                else RoundedCornerShape(bottomStart = HeaderCornerRadius, bottomEnd = HeaderCornerRadius),
                 shadowElevation = 2.dp
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .headerStatusBarPadding(isWideLayout)
                         .padding(
                             top = androidx.compose.ui.unit.lerp(
-                                if (isWideLayout) 24.dp else 80.dp,
-                                if (isWideLayout) 16.dp else 32.dp,
+                                if (isWideLayout) 24.dp else 24.dp,
+                                if (isWideLayout) 16.dp else 8.dp,
                                 headerCollapseFraction
                             ),
                             bottom = androidx.compose.ui.unit.lerp(24.dp, 16.dp, headerCollapseFraction)
@@ -519,14 +574,11 @@ fun MainScreen(
                             Text(
                                 text = stringResource(R.string.ui_moi_dokumenty),
                                 fontSize = (32f - 5f * headerCollapseFraction).sp,
+                                fontFamily = HomeTitleFontFamily,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
-                            AnimatedVisibility(
-                                visible = headerCollapseFraction < 0.55f,
-                                enter = fadeIn() + expandVertically(),
-                                exit = fadeOut() + shrinkVertically()
-                            ) {
+                            CollapsingHeaderContent(headerCollapseFraction) {
                                 Column {
                                     Spacer(modifier = Modifier.height(12.dp))
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -581,7 +633,7 @@ fun MainScreen(
                             )
                         ) {
                             itemsIndexed(folders, key = { _, folder -> folder.id }) { index, folder ->
-                                StaggeredSpringAnimation(index = index) {
+                                StaggeredSpringAnimation(index = index, animationsEnabled = animationsEnabled) {
                                     val selected = activeFolderId == folder.id
                                     val selectedWidth by animateDpAsState(
                                         targetValue = folderWidths[index] +
@@ -615,6 +667,7 @@ fun MainScreen(
                                     ToggleButton(
                                         checked = selected,
                                         onCheckedChange = { isChecked ->
+                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                             if (isChecked) {
                                                 viewModel.selectFolder(folder.id)
                                                 pulsingFolderId = folder.id
@@ -679,10 +732,15 @@ fun MainScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = contentLeftPadding, end = 16.dp)
+                .padding(
+                    top = (innerPadding.calculateTopPadding() - HeaderCornerRadius).coerceAtLeast(0.dp),
+                    start = contentLeftPadding,
+                    end = 16.dp
+                )
+                .clipToBounds()
         ) {
             if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxSize().padding(top = HeaderCornerRadius, bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
                     Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), modifier = Modifier.padding(32.dp)) {
                         Column(modifier = Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp), strokeWidth = 4.dp, strokeCap = StrokeCap.Round)
@@ -695,7 +753,11 @@ fun MainScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = innerPadding.calculateBottomPadding()),
+                        .padding(
+                            top = HeaderCornerRadius + 16.dp,
+                            bottom = innerPadding.calculateBottomPadding() + if (isWideLayout) 24.dp else 120.dp
+                        )
+                        .verticalScroll(emptyScrollState),
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
@@ -713,12 +775,12 @@ fun MainScreen(
                         ) {
                             // ДОБАВЛЕНО: Изображение спящего волка
                             // ДОБАВЛЕНО: Умное масштабирование без растягивания карточки
-                            Image(
-                                painter = painterResource(id = R.drawable.sleep_wolf),
+                            AsyncImage(
+                                model = R.drawable.sleep_wolf,
                                 contentDescription = stringResource(R.string.ui_net_papok),
                                 modifier = Modifier
                                     .width(250.dp)
-                                    .wrapContentHeight(),
+                                    .aspectRatio(1000f / 470f),
                                 contentScale = ContentScale.FillWidth
                             )
 
@@ -760,19 +822,23 @@ fun MainScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = innerPadding.calculateBottomPadding()),
+                        .padding(
+                            top = HeaderCornerRadius + 16.dp,
+                            bottom = innerPadding.calculateBottomPadding() + if (isWideLayout) 24.dp else 120.dp
+                        )
+                        .verticalScroll(emptyScrollState),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.sleep_wolf),
+                        AsyncImage(
+                            model = R.drawable.sleep_wolf,
                             contentDescription = stringResource(R.string.ui_papka_pusta),
                             modifier = Modifier
                                 .width(250.dp) // Размер спящего волка
-                                .wrapContentHeight(),
+                                .aspectRatio(1000f / 470f),
                             contentScale = ContentScale.FillWidth
                         )
 
@@ -788,16 +854,17 @@ fun MainScreen(
             } else {
                 LazyVerticalGrid(
                     state = gridState,
+                    modifier = Modifier.fillMaxSize(),
                     columns = GridCells.Adaptive(minSize = 170.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(
-                        top = innerPadding.calculateTopPadding() + 16.dp,
-                        bottom = 120.dp
+                        top = HeaderCornerRadius + 16.dp,
+                        bottom = innerPadding.calculateBottomPadding() + if (isWideLayout) 24.dp else 120.dp
                     )
                 ) {
                     itemsIndexed(docs, key = { _, doc -> doc.id }) { index, doc ->
-                        StaggeredSpringAnimation(index = index) {
+                        StaggeredSpringAnimation(index = index, animationsEnabled = animationsEnabled) {
                             DocumentCard(document = doc, onClick = { onDocumentClick(doc.id) })
                         }
                     }
@@ -853,8 +920,8 @@ fun WolfMascotWithBubble() {
         modifier = Modifier.size(35.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
-        Image(
-            painter = painterResource(id = getGreetingIconResId()),
+        AsyncImage(
+            model = getGreetingIconResId(),
             contentDescription = stringResource(R.string.ui_maskot),
             modifier = Modifier
                 .fillMaxSize()
@@ -928,8 +995,8 @@ fun DocumentCard(
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            Image(
-                painter = painterResource(id = R.drawable.pattern_guilloche),
+            AsyncImage(
+                model = R.drawable.pattern_guilloche,
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
@@ -962,7 +1029,7 @@ fun DocumentCard(
                     text = displayTitle,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                     textAlign = TextAlign.Start,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
@@ -1072,7 +1139,7 @@ fun CustomNumpad(
 }
 
 @Composable
-fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () -> Unit) {
+fun AuthScreen(verifyPin: (String) -> Boolean, isBiometricEnabled: Boolean, onSuccess: () -> Unit) {
     var pinInput by remember { mutableStateOf("") }
     var isError by remember { mutableStateOf(false) }
 
@@ -1112,8 +1179,8 @@ fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () ->
             ) {
                 Spacer(modifier = Modifier.weight(0.3f))
 
-                Image(
-                    painter = painterResource(id = R.drawable.lock),
+                AsyncImage(
+                    model = R.drawable.lock,
                     contentDescription = stringResource(R.string.ui_blokirovka),
                     modifier = Modifier.size(56.dp)
                 )
@@ -1138,7 +1205,7 @@ fun AuthScreen(correctPin: String, isBiometricEnabled: Boolean, onSuccess: () ->
                         if (pinInput.length < 4 && !isError) {
                             pinInput += digit
                             if (pinInput.length == 4) {
-                                if (pinInput == correctPin) onSuccess()
+                                if (verifyPin(pinInput)) onSuccess()
                                 else isError = true
                             }
                         }
@@ -1177,14 +1244,12 @@ fun showBiometricPrompt(activity: FragmentActivity, onSuccess: () -> Unit) {
 @Composable
 fun StaggeredSpringAnimation(
     index: Int,
+    animationsEnabled: Boolean,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
 
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val prefs = remember { UserPreferences(context) }
-
-    if (!prefs.animationsEnabled) {
+    if (!animationsEnabled) {
         Box(modifier = modifier) {
             content()
         }

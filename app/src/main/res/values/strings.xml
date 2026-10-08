@@ -152,6 +152,10 @@
     <string name="ui_illyustratsiya_poiska">Иллюстрация поиска</string>
     <string name="ui_vvedite_dannye_dlya_poiska">Введите данные для поиска</string>
     <string name="ui_po_vashemu_zaprosu_nichego_ne_naydeno">По вашему запросу ничего не найдено</string>
+    <string name="search_try_another_query">Попробуйте изменить запрос или проверить написание.</string>
+    <string name="search_clear_query">Очистить поиск</string>
+    <string name="create_folder_first">Сначала создайте папку в настройках</string>
+    <string name="recovered_documents_folder">Восстановленные документы</string>
     <string name="ui_sozdanie_kopii">Создание копии...</string>
     <string name="ui_kopiya_uspeshno_sokhranena">Копия успешно сохранена!</string>
     <string name="ui_oshibka_sozdaniya_kopii">Ошибка создания копии</string>
@@ -188,8 +192,18 @@
     <string name="ui_udalit_papku">Удалить папку?</string>
     <string name="ui_izmenit">Изменить</string>
     <string name="ui_peretashchit">Перетащить</string>
+    <string name="folder_show_actions">Показать действия с папкой</string>
+    <string name="folder_hide_actions">Скрыть действия с папкой</string>
     <string name="ui_poryadok_dokumentov">Порядок документов</string>
     <string name="ui_uderzhivayte_ikonku_sprava_chtoby_peretashchit_d">Удерживайте иконку справа, чтобы перетащить документ и изменить его положение.</string>
     <string name="greeting_with_name">%1$s, %2$s!</string>
     <string name="greeting_without_name">%1$s!</string>
+    <string name="document_form_document">Документ</string>
+    <string name="document_form_folder">Папка: %1$s</string>
+    <string name="document_form_data">Данные документа</string>
+    <string name="document_form_attachments">Вложения</string>
+    <string name="document_form_files_hint">Добавьте фотографии или PDF-файлы документа</string>
+    <string name="document_form_file">Файл</string>
+    <string name="document_saving">Сохранение…</string>
+    <string name="document_save_error">Не удалось сохранить документ. Проверьте доступ к выбранным файлам и попробуйте ещё раз.</string>
 </resources>

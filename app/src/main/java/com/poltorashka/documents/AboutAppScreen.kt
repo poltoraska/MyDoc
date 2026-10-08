@@ -1,15 +1,17 @@
 package com.poltorashka.documents
 
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
+import coil.compose.AsyncImage
+
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -22,15 +24,18 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,109 +43,101 @@ import bounceClick
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.res.stringResource
+import com.poltorashka.documents.ui.theme.HomeTitleFontFamily
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutAppScreen(onBackClick: () -> Unit) {
     val uriHandler = LocalUriHandler.current
+    val navigationBarBottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     // --- Вычисляет ширину экрана ---
     val configuration = LocalConfiguration.current
     val isWideScreen = configuration.screenWidthDp >= 600
+    val headerScrollBehavior = rememberNavigationHeaderScrollBehavior()
+    val scrollState = rememberScrollState()
     // ------------------------------------------
 
-    Column(
+    Scaffold(
         modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .navigationBarsPadding() // Отступ только снизу, чтобы не налезать на полоску навигации
-    ) {
-        // --- ШАПКА ---
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
-            shadowElevation = 2.dp
-        ) {
-            // Адаптивная логика для шапки
+            .then(if (isWideScreen) Modifier else Modifier.nestedScroll(headerScrollBehavior.nestedScrollConnection)),
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
             if (isWideScreen) {
-                // РЕЖИМ ПЛАНШЕТА В одну строку
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(top = 24.dp, bottom = 24.dp, start = 24.dp, end = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
+                    shadowElevation = 2.dp
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surface,
+                    // РЕЖИМ ПЛАНШЕТА В одну строку
+                    Row(
                         modifier = Modifier
-                            .size(44.dp)
-                            .bounceClick { onBackClick() }
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(top = 24.dp, bottom = 24.dp, start = 24.dp, end = 24.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.ui_nazad),
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .bounceClick { onBackClick() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = stringResource(R.string.ui_nazad),
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        Text(
+                            text = stringResource(R.string.ui_o_prilozhenii),
+                            fontSize = 24.sp, // Чуть меньше для однострочного дизайна
+                            fontFamily = HomeTitleFontFamily,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
                     }
-
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    Text(
-                        text = stringResource(R.string.ui_o_prilozhenii),
-                        fontSize = 24.sp, // Чуть меньше для однострочного дизайна
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
                 }
             } else {
-                // РЕЖИМ СМАРТФОНА в два этажа
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(top = 24.dp, bottom = 32.dp, start = 24.dp, end = 24.dp)
-                ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .bounceClick { onBackClick() }
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.ui_nazad),
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
+                CollapsingNavigationHeader(
+                    title = stringResource(R.string.ui_o_prilozhenii),
+                    scrollBehavior = headerScrollBehavior,
+                    navigationIcon = {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.size(44.dp).bounceClick { onBackClick() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = stringResource(R.string.ui_nazad),
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Text(
-                        text = stringResource(R.string.ui_o_prilozhenii),
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                }
+                )
             }
         }
-
+    ) { innerPadding ->
         // --- КОНТЕНТ ---
-        val scrollState = rememberScrollState() // Запоминает позицию прокрутки
-
+        val headerOverlap = if (isWideScreen) 0.dp else HeaderCornerRadius
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f) // Важно: заставляет колонку занять ровно всё место ПОД шапкой
+                .fillMaxSize()
+                .padding(top = (innerPadding.calculateTopPadding() - headerOverlap).coerceAtLeast(0.dp))
+                .clipToBounds()
                 .verticalScroll(scrollState) // Включает вертикальную прокрутку
-                .padding(24.dp) // Отступы по краям
+                .padding(start = 24.dp, top = headerOverlap + 24.dp, end = 24.dp, bottom = 24.dp + navigationBarBottomPadding)
         ) {
             // Карточка с благодарностью
             Surface(
@@ -152,8 +149,8 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
                     modifier = Modifier.padding(24.dp)
                 ) {
                     // КАРТИНКА ВОЛКА
-                    Image(
-                        painter = painterResource(id = R.drawable.sleep_wolf),
+                    AsyncImage(
+                        model = R.drawable.sleep_wolf,
                         contentDescription = stringResource(R.string.ui_maskot),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -189,8 +186,8 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.img_avatar),
+                    AsyncImage(
+                        model = R.drawable.img_avatar,
                         contentDescription = stringResource(R.string.ui_profil_github),
                         modifier = Modifier
                             .size(48.dp)

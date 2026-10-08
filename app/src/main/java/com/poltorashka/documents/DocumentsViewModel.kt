@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -46,7 +47,9 @@ class DocumentsViewModel(
         _selectedFolderId,
         folders
     ) { allDocs, currentFolderId, allFolders ->
-        val activeFolderId = currentFolderId ?: allFolders.firstOrNull()?.id
+        val activeFolderId = currentFolderId?.takeIf { id ->
+            allFolders.any { it.id == id }
+        } ?: allFolders.firstOrNull()?.id
 
         if (activeFolderId != null) {
             allDocs.filter { it.profileId == activeFolderId }
@@ -57,6 +60,13 @@ class DocumentsViewModel(
 
     fun selectFolder(folderId: Int) {
         _selectedFolderId.value = folderId
+    }
+
+    suspend fun activeFolderId(): Int? {
+        val currentFolders = folderDao.getAllFolders().first()
+        return _selectedFolderId.value?.takeIf { selected ->
+            currentFolders.any { it.id == selected }
+        } ?: currentFolders.firstOrNull()?.id
     }
 
     // --- Логика обновления порядка после перетаскивания (Drag & Drop) ---

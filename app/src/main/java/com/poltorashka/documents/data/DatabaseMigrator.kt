@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
+import java.io.InputStream
+import java.security.MessageDigest
 
 object DatabaseMigrator {
 
@@ -69,33 +71,50 @@ object DatabaseMigrator {
         } catch (_: Exception) { true }
     }
 
-    // Метод шифрования фото остается без изменений
-    fun encryptExistingPhotos(context: Context) {
+    // Encrypt old unprotected attachments, keeping the source until decryption is verified.
+    fun encryptExistingPhotos(context: Context): Boolean {
         val filesDir = context.filesDir
-        val photos = filesDir.listFiles { file -> file.extension == "jpg" } ?: return
-        photos.forEach { file ->
-            if (!isFileEncrypted(file)) {
-                try {
-                    val tempFile = File(context.cacheDir, "temp_mig_${file.name}")
-                    file.renameTo(tempFile)
-                    val encryptedFile = FileSecurity.getEncryptedFile(context, file)
-                    tempFile.inputStream().use { input ->
-                        encryptedFile.openFileOutput().use { output -> input.copyTo(output) }
-                    }
-                    tempFile.delete()
-                } catch (_: Exception) {}
+        var complete = true
+        filesDir.listFiles { file -> file.name.endsWith(".legacy_migration") }?.forEach { backup ->
+            val original = File(filesDir, backup.name.removeSuffix(".legacy_migration"))
+            if (original.exists() && !original.delete()) complete = false
+            if (!original.exists() && !backup.renameTo(original)) complete = false
+        }
+
+        filesDir.listFiles()?.filter(FileSecurity::isLegacyPlaintext)?.forEach { file ->
+            val backup = File(filesDir, "${file.name}.legacy_migration")
+            var sourceMoved = false
+            try {
+                check(file.renameTo(backup))
+                sourceMoved = true
+                val encrypted = FileSecurity.getEncryptedFile(context, file)
+                backup.inputStream().use { source ->
+                    encrypted.openFileOutput().use { destination -> source.copyTo(destination) }
+                }
+                val originalHash = backup.inputStream().use(::sha256)
+                val encryptedHash = encrypted.openFileInput().use(::sha256)
+                check(MessageDigest.isEqual(originalHash, encryptedHash))
+                check(backup.delete())
+            } catch (error: Exception) {
+                complete = false
+                error.printStackTrace()
+                if (sourceMoved) {
+                    file.delete()
+                    if (backup.exists()) backup.renameTo(file)
+                }
             }
         }
+        return complete
     }
 
-    private fun isFileEncrypted(file: File): Boolean {
-        return try {
-            file.inputStream().use { input ->
-                val firstBytes = ByteArray(2)
-                input.read(firstBytes, 0, 2)
-                val isJpg = firstBytes[0] == 0xFF.toByte() && firstBytes[1] == 0xD8.toByte()
-                !isJpg
-            }
-        } catch (_: Exception) { true }
+    private fun sha256(input: InputStream): ByteArray {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            digest.update(buffer, 0, count)
+        }
+        return digest.digest()
     }
 }

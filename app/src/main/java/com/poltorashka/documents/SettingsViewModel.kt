@@ -1,20 +1,27 @@
 package com.poltorashka.documents
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
+import com.poltorashka.documents.data.AppDatabase
 import com.poltorashka.documents.data.DocumentDao
 import com.poltorashka.documents.data.FolderDao
 import com.poltorashka.documents.data.FolderEntity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 
 class SettingsViewModel(
-    private val folderDao: FolderDao,
-    private val documentDao: DocumentDao
+    private val context: Context,
+    private val database: AppDatabase
 ) : ViewModel() {
+    private val folderDao: FolderDao = database.folderDao()
+    private val documentDao: DocumentDao = database.documentDao()
 
     val folders: StateFlow<List<FolderEntity>> = folderDao.getAllFolders()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -33,9 +40,23 @@ class SettingsViewModel(
     }
 
     fun deleteFolder(folderId: Int) {
-        viewModelScope.launch {
-            documentDao.deleteDocumentsByProfileId(folderId)
-            folderDao.deleteFolder(folderId)
+        viewModelScope.launch(Dispatchers.IO) {
+            val pathsToDelete = database.withTransaction {
+                val deletedDocuments = documentDao.getDocumentsByProfileId(folderId)
+                documentDao.deleteDocumentsByProfileId(folderId)
+                folderDao.deleteFolder(folderId)
+                val remainingPaths = documentDao.getAllDocumentsSnapshot()
+                    .flatMap { it.photoUris }.map { File(it).canonicalPath }.toSet()
+                deletedDocuments.flatMap { it.photoUris }
+                    .distinct().filterNot { File(it).canonicalPath in remainingPaths }
+            }
+            val filesDirectory = context.filesDir.canonicalFile
+            pathsToDelete.forEach { path ->
+                runCatching {
+                    val attachment = File(path).canonicalFile
+                    if (attachment.parentFile == filesDirectory) attachment.delete()
+                }
+            }
         }
     }
 
@@ -66,10 +87,10 @@ class SettingsViewModel(
     }
 }
 
-class SettingsViewModelFactory(private val folderDao: FolderDao, private val docDao: DocumentDao) : ViewModelProvider.Factory {
+class SettingsViewModelFactory(private val context: Context, private val database: AppDatabase) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(SettingsViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST") return SettingsViewModel(folderDao, docDao) as T
+            @Suppress("UNCHECKED_CAST") return SettingsViewModel(context.applicationContext, database) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

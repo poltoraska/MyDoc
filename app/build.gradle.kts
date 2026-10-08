@@ -18,6 +18,10 @@ android {
 
     defaultConfig {
         applicationId = "com.whitewolf.documents"
+        // Run destructive backup regression tests in a separate app sandbox.
+        if (providers.gradleProperty("isolatedRegressionTests").orNull == "true") {
+            applicationIdSuffix = ".regression"
+        }
         minSdk = 28
         targetSdk = 36
         versionCode = 29
@@ -55,6 +59,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    // Use updatable system emoji on Android 15+ and compatibility fonts on older devices.
+    implementation("androidx.emoji2:emoji2:1.7.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

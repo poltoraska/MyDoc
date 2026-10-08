@@ -1,9 +1,10 @@
 package com.poltorashka.documents
 
+import coil.compose.AsyncImage
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -45,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -81,7 +83,7 @@ import androidx.compose.ui.res.stringResource
 fun OnboardingScreen(onFinish: () -> Unit) {
     var currentStep by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
-    val prefs = remember { UserPreferences(context) }
+    val prefs = remember { UserPreferences.getInstance(context) }
 
     Crossfade(targetState = currentStep, label = "onboarding_animation") { step ->
         when (step) {
@@ -144,8 +146,8 @@ fun WelcomeStep(onNext: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(16.dp)) // Уменьшили с 32.dp
 
-                    Image(
-                        painter = painterResource(id = R.drawable.img_wolf),
+                    AsyncImage(
+                        model = R.drawable.img_wolf,
                         contentDescription = stringResource(R.string.ui_illyustratsiya_volka),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -320,8 +322,9 @@ fun FeatureItem(iconRes: Int, title: String, description: String) {
 fun NameSetupStep(onFinish: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
-    val prefs = remember { UserPreferences(context) }
+    val prefs = remember { UserPreferences.getInstance(context) }
 
     // Состояния для восстановления
     var showRestoreDialog by remember { mutableStateOf(false) }
@@ -413,8 +416,8 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
 
                     Spacer(modifier = Modifier.height(48.dp))
 
-                    Image(
-                        painter = painterResource(id = R.drawable.img_wolf_keyboard),
+                    AsyncImage(
+                        model = R.drawable.img_wolf_keyboard,
                         contentDescription = stringResource(R.string.ui_lapki_na_klaviature),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -511,25 +514,19 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
                 TextButton(onClick = {
                     if (restorePasswordInput.isNotBlank() && selectedRestoreUri != null) {
                         showRestoreDialog = false
-                        android.widget.Toast.makeText(context, context.getString(R.string.ui_raspakovka_arkhiva), android.widget.Toast.LENGTH_SHORT).show()
-
-                        try {
-                            com.poltorashka.documents.data.AppDatabase.getDatabase(context).close()
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
+                        android.widget.Toast.makeText(context, resources.getString(R.string.ui_raspakovka_arkhiva), android.widget.Toast.LENGTH_SHORT).show()
 
                         scope.launch {
                             val success = com.poltorashka.documents.utils.BackupManager.restoreBackup(context, selectedRestoreUri!!, restorePasswordInput)
                             if (success) {
-                                android.widget.Toast.makeText(context, context.getString(R.string.ui_dannye_vosstanovleny_uspeshno), android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(context, resources.getString(R.string.ui_dannye_vosstanovleny_uspeshno), android.widget.Toast.LENGTH_LONG).show()
 
                                 kotlin.concurrent.thread {
                                     Thread.sleep(1500)
                                     Runtime.getRuntime().exit(0)
                                 }
                             } else {
-                                android.widget.Toast.makeText(context, context.getString(R.string.ui_oshibka_nevernyy_parol_ili_fayl_povrezhden), android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(context, resources.getString(R.string.ui_oshibka_nevernyy_parol_ili_fayl_povrezhden), android.widget.Toast.LENGTH_LONG).show()
                             }
                             selectedRestoreUri = null
                             restorePasswordInput = ""

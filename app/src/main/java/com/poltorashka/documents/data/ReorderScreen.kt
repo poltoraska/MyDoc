@@ -3,6 +3,9 @@ package com.poltorashka.documents.data
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -17,11 +20,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration // Добавлен импорт для конфигурации
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,6 +36,10 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import bounceClick
 import com.poltorashka.documents.DocumentsViewModel
 import com.poltorashka.documents.R
+import com.poltorashka.documents.ui.theme.HomeTitleFontFamily
+import com.poltorashka.documents.CollapsingNavigationHeader
+import com.poltorashka.documents.HeaderCornerRadius
+import com.poltorashka.documents.rememberNavigationHeaderScrollBehavior
 import androidx.compose.ui.res.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,7 +48,8 @@ fun ReorderScreen(
     onBackClick: () -> Unit,
     viewModel: DocumentsViewModel
 ) {
-    val context = LocalContext.current
+    val resources = LocalResources.current
+    val otherDocumentType = stringResource(R.string.document_type_other)
     val docs by viewModel.documents.collectAsState()
     val localDocs = remember(docs) { docs.toMutableStateList() }
 
@@ -55,20 +65,21 @@ fun ReorderScreen(
     // --- НОВЫЙ БЛОК: Вычисляем ширину экрана ---
     val configuration = LocalConfiguration.current
     val isWideScreen = configuration.screenWidthDp >= 600
+    val headerScrollBehavior = rememberNavigationHeaderScrollBehavior()
+    val headerDragState = rememberScrollableState { 0f }
     // ------------------------------------------
 
     Scaffold(
+        modifier = Modifier.then(if (isWideScreen) Modifier else Modifier.nestedScroll(headerScrollBehavior.nestedScrollConnection)),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                // Скругления оставляем неизменными, так как экран без бокового меню
-                shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
-                shadowElevation = 2.dp
-            ) {
-                // ИЗМЕНЕНО: Адаптивная логика шапки
-                if (isWideScreen) {
+            if (isWideScreen) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
+                    shadowElevation = 2.dp
+                ) {
                     // РЕЖИМ ПЛАНШЕТА: В одну строку
                     Row(
                         modifier = Modifier
@@ -97,23 +108,21 @@ fun ReorderScreen(
                         Text(
                             text = stringResource(R.string.ui_poryadok_dokumentov),
                             fontSize = 24.sp, // Уменьшенный шрифт для однострочного дизайна
+                            fontFamily = HomeTitleFontFamily,
                             fontWeight = FontWeight.ExtraBold,
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
-                } else {
-                    // РЕЖИМ СМАРТФОНА: Классический двухуровневый дизайн
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 64.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
-                    ) {
+                }
+            } else {
+                CollapsingNavigationHeader(
+                    title = stringResource(R.string.ui_poryadok_dokumentov),
+                    scrollBehavior = headerScrollBehavior,
+                    navigationIcon = {
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-                            modifier = Modifier
-                                .size(44.dp)
-                                .bounceClick { onBackClick() }
+                            modifier = Modifier.size(44.dp).bounceClick { onBackClick() }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
@@ -123,26 +132,28 @@ fun ReorderScreen(
                                 )
                             }
                         }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(
-                            text = stringResource(R.string.ui_poryadok_dokumentov),
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
                     }
-                }
+                )
             }
         }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp, vertical = 24.dp)
+                .then(
+                    if (isWideScreen) Modifier.padding(innerPadding).padding(horizontal = 16.dp, vertical = 24.dp)
+                    else Modifier
+                        .padding(
+                            top = (innerPadding.calculateTopPadding() - HeaderCornerRadius).coerceAtLeast(0.dp),
+                            bottom = innerPadding.calculateBottomPadding(),
+                            start = 16.dp,
+                            end = 16.dp
+                        )
+                        .clipToBounds()
+                        .scrollable(headerDragState, Orientation.Vertical)
+                )
         ) {
+            if (!isWideScreen) Spacer(Modifier.height(HeaderCornerRadius + 24.dp))
             Text(
                 text = stringResource(R.string.ui_uderzhivayte_ikonku_sprava_chtoby_peretashchit_d),
                 fontSize = 14.sp,
@@ -232,9 +243,9 @@ fun ReorderScreen(
                         }
 
                         val rawTitle = if (doc.documentType == "Другое") {
-                            doc.fieldsData["Название документа"] ?: context.getString(R.string.document_type_other)
+                            doc.fieldsData["Название документа"] ?: otherDocumentType
                         } else {
-                            DocumentTemplates.documentTypeLabel(doc.documentType, context.resources)
+                            DocumentTemplates.documentTypeLabel(doc.documentType, resources)
                         }
 
                         Box(modifier = modifier) {

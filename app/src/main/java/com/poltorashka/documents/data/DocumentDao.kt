@@ -32,4 +32,13 @@ interface DocumentDao {
 
     @Query("DELETE FROM documents WHERE profileId = :profileId")
     suspend fun deleteDocumentsByProfileId(profileId: Int)
+
+    @Query("SELECT * FROM documents WHERE profileId = :profileId")
+    suspend fun getDocumentsByProfileId(profileId: Int): List<DocumentEntity>
+
+    @Query("SELECT * FROM documents")
+    suspend fun getAllDocumentsSnapshot(): List<DocumentEntity>
+
+    @Query("SELECT * FROM documents WHERE profileId NOT IN (SELECT id FROM folders)")
+    suspend fun getOrphanDocuments(): List<DocumentEntity>
 }

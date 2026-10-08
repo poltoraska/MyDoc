@@ -1,9 +1,10 @@
 package com.poltorashka.documents
 
+import coil.compose.AsyncImage
+
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -19,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -38,11 +38,11 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,22 +56,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -81,10 +85,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import bounceClick
 import com.poltorashka.documents.data.AppDatabase
 import com.poltorashka.documents.data.FolderEntity
+import com.poltorashka.documents.ui.theme.HomeTitleFontFamily
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(
     onBackClick: () -> Unit,
@@ -92,18 +98,19 @@ fun SettingsScreen(
     onSearchClick: () -> Unit,
     viewModel: SettingsViewModel = viewModel(
         factory = SettingsViewModelFactory(
-            AppDatabase.getDatabase(LocalContext.current).folderDao(),
-            AppDatabase.getDatabase(LocalContext.current).documentDao()
+            LocalContext.current.applicationContext,
+            AppDatabase.getDatabase(LocalContext.current)
         )
     ),
     onAboutClick: () -> Unit,
     isWideLayout: Boolean? = null
 ) {
     val context = LocalContext.current
-    val prefs = remember { UserPreferences(context) }
+    val resources = LocalResources.current
+    val prefs = remember { UserPreferences.getInstance(context) }
     var userName by remember { mutableStateOf(prefs.userName) }
-    var themeModeState by remember { mutableIntStateOf(prefs.themeMode) }
-    var isDynamicColorState by remember { mutableStateOf(prefs.useDynamicColor) }
+    val themeModeState by prefs.themeModeFlow.collectAsState()
+    val isDynamicColorState by prefs.dynamicColorFlow.collectAsState()
 
     var animationsEnabledState by remember { mutableStateOf(prefs.animationsEnabled) }
 
@@ -119,7 +126,7 @@ fun SettingsScreen(
     var draggingIndex by remember { mutableStateOf<Int?>(null) }
     var draggingItemOffset by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
-    val itemHeightPx = with(density) { 72.dp.toPx() }
+    val itemHeightPx = with(density) { 76.dp.toPx() }
 
     var isPinEnabledState by remember { mutableStateOf(prefs.isPinEnabled) }
     var isBiometricEnabledState by remember { mutableStateOf(prefs.isBiometricEnabled) }
@@ -139,17 +146,19 @@ fun SettingsScreen(
     val isWideScreen = isWideLayout ?: (configuration.screenWidthDp >= 600)
     val headerHorizontalPadding = if (isWideScreen) 16.dp else 24.dp
     val contentLeftPadding = 16.dp
+    val headerScrollBehavior = rememberHeaderScrollBehavior(if (isWideScreen) 36.dp else 76.dp)
+    val headerCollapseFraction = headerScrollBehavior.state.collapsedFraction
 
     val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")
     ) { uri ->
         if (uri != null && backupPasswordTemp.isNotEmpty()) {
-            android.widget.Toast.makeText(context, context.getString(R.string.ui_sozdanie_kopii), android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, resources.getString(R.string.ui_sozdanie_kopii), android.widget.Toast.LENGTH_SHORT).show()
             viewModel.createBackup(context, uri, backupPasswordTemp) { success ->
                 if (success) {
-                    android.widget.Toast.makeText(context, context.getString(R.string.ui_kopiya_uspeshno_sokhranena), android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(context, resources.getString(R.string.ui_kopiya_uspeshno_sokhranena), android.widget.Toast.LENGTH_LONG).show()
                 } else {
-                    android.widget.Toast.makeText(context, context.getString(R.string.ui_oshibka_sozdaniya_kopii), android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(context, resources.getString(R.string.ui_oshibka_sozdaniya_kopii), android.widget.Toast.LENGTH_LONG).show()
                 }
                 backupPasswordTemp = ""
             }
@@ -217,7 +226,7 @@ fun SettingsScreen(
                 LazyColumn(
                     state = listState,
                     userScrollEnabled = false,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.fillMaxWidth().heightIn(max = 2000.dp)
                         .pointerInput(localFolders) {
                             detectDragGesturesAfterLongPress(
@@ -258,9 +267,16 @@ fun SettingsScreen(
                 ) {
                     itemsIndexed(localFolders, key = { _, folder -> folder.id }) { index, folder ->
                         val modifier = if (index == draggingIndex) Modifier.zIndex(1f).graphicsLayer { translationY = draggingItemOffset; shadowElevation = 16.dp.toPx() } else Modifier.animateItem()
+                        val itemShape = when {
+                            localFolders.size == 1 -> RoundedCornerShape(28.dp)
+                            index == 0 -> RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
+                            index == localFolders.lastIndex -> RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 28.dp, bottomEnd = 28.dp)
+                            else -> RoundedCornerShape(8.dp)
+                        }
                         Box(modifier = modifier) {
                             CustomSwipeToRevealItem(
                                 folder = folder,
+                                shape = itemShape,
                                 isRevealed = revealedFolderId == folder.id,
                                 onRevealChange = { isRevealed -> revealedFolderId = if (isRevealed) folder.id else null },
                                 onEdit = { folderToEdit = folder; revealedFolderId = null },
@@ -285,7 +301,7 @@ fun SettingsScreen(
                         checked = isPinEnabledState,
                         onCheckedChange = { isChecked ->
                             if (isChecked) { isPinEnabledState = true; showPinSetupDialog = true } else {
-                                isPinEnabledState = false; prefs.isPinEnabled = false; prefs.appPin = ""; isBiometricEnabledState = false; prefs.isBiometricEnabled = false
+                                isPinEnabledState = false; prefs.isPinEnabled = false; prefs.clearPin(); isBiometricEnabledState = false; prefs.isBiometricEnabled = false
                             }
                         }
                     )
@@ -330,20 +346,11 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Выбор темы (Авто, Светлая, Тёмная)
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val themes = listOf(stringResource(R.string.ui_avto), stringResource(R.string.ui_svetlaya), stringResource(R.string.ui_tyomnaya))
-                    themes.forEachIndexed { index, title ->
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (themeModeState == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                            modifier = Modifier.weight(1f).height(40.dp).bounceClick { themeModeState = index; prefs.themeMode = index; (context as? android.app.Activity)?.recreate() }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(text = title, color = if (themeModeState == index) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                            }
-                        }
-                    }
-                }
+                ThemeSelectionButtons(
+                    selectedMode = themeModeState,
+                    animationsEnabled = animationsEnabledState,
+                    onModeSelected = { prefs.themeMode = it }
+                )
 
                 // Динамические цвета (Android 12+)
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
@@ -356,7 +363,7 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.width(16.dp))
                         androidx.compose.material3.Switch(
                             checked = isDynamicColorState,
-                            onCheckedChange = { isDynamicColorState = it; prefs.useDynamicColor = it; (context as? android.app.Activity)?.recreate() }
+                            onCheckedChange = { prefs.useDynamicColor = it }
                         )
                     }
                 }
@@ -382,6 +389,7 @@ fun SettingsScreen(
     }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(headerScrollBehavior.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Surface(
@@ -393,16 +401,21 @@ fun SettingsScreen(
                         else Modifier
                     ),
                 color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = if (isWideScreen) RoundedCornerShape(32.dp)
-                else RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
+                shape = if (isWideScreen) RoundedCornerShape(HeaderCornerRadius)
+                else RoundedCornerShape(bottomStart = HeaderCornerRadius, bottomEnd = HeaderCornerRadius),
                 shadowElevation = 2.dp
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .headerStatusBarPadding(isWideScreen)
                         .padding(
-                            top = if (isWideScreen) 24.dp else 80.dp,
-                            bottom = 24.dp,
+                            top = androidx.compose.ui.unit.lerp(
+                                if (isWideScreen) 24.dp else 24.dp,
+                                if (isWideScreen) 16.dp else 8.dp,
+                                headerCollapseFraction
+                            ),
+                            bottom = androidx.compose.ui.unit.lerp(24.dp, 16.dp, headerCollapseFraction),
                             start = headerHorizontalPadding,
                             end = headerHorizontalPadding
                         ),
@@ -413,23 +426,26 @@ fun SettingsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = stringResource(R.string.ui_nastroyki),
-                                fontSize = 32.sp,
+                                fontSize = (32f - 5f * headerCollapseFraction).sp,
+                                fontFamily = HomeTitleFontFamily,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                             Spacer(modifier = Modifier.width(12.dp))
-                            Image(
-                                painter = painterResource(id = R.drawable.settings),
+                            AsyncImage(
+                                model = R.drawable.settings,
                                 contentDescription = stringResource(R.string.ui_ikonka_nastroek),
                                 modifier = Modifier.size(30.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = stringResource(R.string.ui_upravlenie_prilozheniem),
-                            fontSize = 18.sp,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
-                        )
+                        CollapsingHeaderContent(headerCollapseFraction) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.ui_upravlenie_prilozheniem),
+                                fontSize = 18.sp,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
                     }
 
                     Surface(
@@ -455,13 +471,18 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 // Отступ слева (contentLeftPadding)
-                .padding(start = contentLeftPadding, end = 16.dp)
+                .padding(
+                    top = (innerPadding.calculateTopPadding() - HeaderCornerRadius).coerceAtLeast(0.dp),
+                    start = contentLeftPadding,
+                    end = 16.dp
+                )
+                .clipToBounds()
                 .verticalScroll(screenScrollState)
                 .pointerInput(Unit) {
                     detectTapGestures(onTap = { revealedFolderId = null })
                 },
         ) {
-            Spacer(modifier = Modifier.height(innerPadding.calculateTopPadding() + 8.dp))
+            Spacer(modifier = Modifier.height(HeaderCornerRadius + 8.dp))
 
             // --- Адаптивный вывод блоков настроек ---
             if (isWideScreen) {
@@ -568,14 +589,13 @@ fun SettingsScreen(
                 TextButton(onClick = {
                     if (restorePasswordInput.isNotBlank() && selectedRestoreUri != null) {
                         showRestoreDialog = false
-                        android.widget.Toast.makeText(context, context.getString(R.string.ui_vosstanovlenie_2), android.widget.Toast.LENGTH_SHORT).show()
-                        try { com.poltorashka.documents.data.AppDatabase.getDatabase(context).close() } catch (e: Exception) { e.printStackTrace() }
+                        android.widget.Toast.makeText(context, resources.getString(R.string.ui_vosstanovlenie_2), android.widget.Toast.LENGTH_SHORT).show()
                         viewModel.restoreBackup(context, selectedRestoreUri!!, restorePasswordInput) { success ->
                             if (success) {
-                                android.widget.Toast.makeText(context, context.getString(R.string.ui_dannye_vosstanovleny_uspeshno), android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(context, resources.getString(R.string.ui_dannye_vosstanovleny_uspeshno), android.widget.Toast.LENGTH_LONG).show()
                                 kotlin.concurrent.thread { Thread.sleep(1500); Runtime.getRuntime().exit(0) }
                             } else {
-                                android.widget.Toast.makeText(context, context.getString(R.string.ui_oshibka_nevernyy_parol_ili_fayl_povrezhden), android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(context, resources.getString(R.string.ui_oshibka_nevernyy_parol_ili_fayl_povrezhden), android.widget.Toast.LENGTH_LONG).show()
                             }
                             selectedRestoreUri = null
                         }
@@ -621,8 +641,8 @@ fun SettingsScreen(
                     ) {
                         Spacer(modifier = Modifier.weight(0.3f))
 
-                        Image(
-                            painter = painterResource(id = R.drawable.lock),
+                        AsyncImage(
+                            model = R.drawable.lock,
                             contentDescription = stringResource(R.string.ui_blokirovka),
                             modifier = Modifier.size(56.dp)
                         )
@@ -646,7 +666,7 @@ fun SettingsScreen(
                                     if (pinInput.length == 4) {
                                         if (!isConfirmMode) { firstPin = pinInput; pinInput = ""; isConfirmMode = true } else {
                                             if (pinInput == firstPin) {
-                                                prefs.appPin = pinInput; prefs.isPinEnabled = true; isPinEnabledState = true; showPinSetupDialog = false
+                                                prefs.setPin(pinInput); prefs.isPinEnabled = true; isPinEnabledState = true; showPinSetupDialog = false
                                             } else { isError = true }
                                         }
                                     }
@@ -705,36 +725,134 @@ fun SettingsScreen(
 @Composable
 fun CustomSwipeToRevealItem(
     folder: FolderEntity,
+    shape: RoundedCornerShape,
     isRevealed: Boolean,
     onRevealChange: (Boolean) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val offset by animateDpAsState(targetValue = if (isRevealed) (-120).dp else 0.dp, animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
-    Box(modifier = Modifier.fillMaxWidth().height(64.dp)) {
+    val revealWidth = 144.dp
+    val density = LocalDensity.current
+    val revealWidthPx = with(density) { revealWidth.toPx() }
+    val swipeThresholdPx = with(density) { 40.dp.toPx() }
+    val animatedOffset = remember(folder.id, revealWidthPx) {
+        Animatable(if (isRevealed) -revealWidthPx else 0f)
+    }
+    val animationScope = rememberCoroutineScope()
+    var isDraggingHorizontally by remember { mutableStateOf(false) }
+    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
+    var dragStartOffsetPx by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(isRevealed, revealWidthPx) {
+        if (!isDraggingHorizontally) {
+            animatedOffset.animateTo(
+                targetValue = if (isRevealed) -revealWidthPx else 0f,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+            )
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxWidth().height(72.dp).clipToBounds()) {
         Row(
-            modifier = Modifier.align(Alignment.CenterEnd).width(120.dp).fillMaxHeight(),
-            horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.align(Alignment.CenterEnd).width(revealWidth).fillMaxHeight().padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onEdit, modifier = Modifier.background(MaterialTheme.colorScheme.primaryContainer, CircleShape)) {
-                Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.ui_izmenit), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            Surface(
+                onClick = onDelete,
+                modifier = Modifier.size(64.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.ui_udalit), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
             }
-            IconButton(onClick = onDelete, modifier = Modifier.background(MaterialTheme.colorScheme.errorContainer, CircleShape)) {
-                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.ui_udalit), tint = MaterialTheme.colorScheme.onErrorContainer)
+            Surface(
+                onClick = onEdit,
+                modifier = Modifier.size(64.dp),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.primary
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.ui_izmenit), tint = MaterialTheme.colorScheme.onPrimary)
+                }
             }
         }
-        ElevatedCard(
-            modifier = Modifier.fillMaxSize().offset(x = offset).pointerInput(Unit) {
-                detectHorizontalDragGestures { _, dragAmount ->
-                    if (dragAmount < -5) onRevealChange(true)
-                    if (dragAmount > 5) onRevealChange(false)
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationX = if (isDraggingHorizontally) dragOffsetPx else animatedOffset.value
                 }
-            }.clickable { if (isRevealed) onRevealChange(false) },
-            shape = RoundedCornerShape(12.dp)
+                .pointerInput(isRevealed, revealWidthPx) {
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            dragStartOffsetPx = animatedOffset.value.coerceIn(-revealWidthPx, 0f)
+                            dragOffsetPx = dragStartOffsetPx
+                            isDraggingHorizontally = true
+                        },
+                        onDragEnd = {
+                            val shouldReveal = when {
+                                dragOffsetPx - dragStartOffsetPx < -swipeThresholdPx -> true
+                                dragOffsetPx - dragStartOffsetPx > swipeThresholdPx -> false
+                                else -> isRevealed
+                            }
+                            val releaseOffsetPx = dragOffsetPx
+                            animationScope.launch {
+                                animatedOffset.snapTo(releaseOffsetPx)
+                                isDraggingHorizontally = false
+                                onRevealChange(shouldReveal)
+                                if (shouldReveal == isRevealed) {
+                                    animatedOffset.animateTo(
+                                        targetValue = if (shouldReveal) -revealWidthPx else 0f,
+                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                                    )
+                                }
+                            }
+                        },
+                        onDragCancel = {
+                            val releaseOffsetPx = dragOffsetPx
+                            animationScope.launch {
+                                animatedOffset.snapTo(releaseOffsetPx)
+                                isDraggingHorizontally = false
+                                animatedOffset.animateTo(
+                                    targetValue = if (isRevealed) -revealWidthPx else 0f,
+                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                                )
+                            }
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            dragOffsetPx = (dragOffsetPx + dragAmount).coerceIn(-revealWidthPx, 0f)
+                        }
+                    )
+                }
+                .clickable(enabled = isRevealed) { onRevealChange(false) },
+            shape = shape,
+            color = MaterialTheme.colorScheme.surface
         ) {
-            Row(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(folder.name, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                Icon(Icons.Filled.Menu, contentDescription = stringResource(R.string.ui_peretashchit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                modifier = Modifier.fillMaxSize().padding(start = 20.dp, end = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = folder.name,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = { onRevealChange(!isRevealed) }) {
+                    Icon(
+                        Icons.Filled.MoreVert,
+                        contentDescription = stringResource(if (isRevealed) R.string.folder_hide_actions else R.string.folder_show_actions),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

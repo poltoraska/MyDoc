@@ -38,7 +38,6 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -55,11 +54,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -72,6 +74,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import bounceClick
 import coil.compose.AsyncImage
 import com.poltorashka.documents.data.AppDatabase
+import com.poltorashka.documents.ui.theme.HomeTitleFontFamily
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -192,10 +195,12 @@ fun DocumentDetailScreen(
 
     val document by viewModel.document.collectAsState()
     val context = LocalContext.current
+    val resources = LocalResources.current
 
     val configuration = LocalConfiguration.current
     val isWideScreen = configuration.screenWidthDp >= 600
     val columnsCount = if (isWideScreen) 2 else 1
+    val headerScrollBehavior = rememberNavigationHeaderScrollBehavior()
 
     var imageToDelete by remember { mutableStateOf<String?>(null) }
     var isEditing by remember { mutableStateOf(false) }
@@ -267,21 +272,20 @@ fun DocumentDetailScreen(
     }
 
     Scaffold(
+        modifier = Modifier.then(if (isWideScreen) Modifier else Modifier.nestedScroll(headerScrollBehavior.nestedScrollConnection)),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
-                shadowElevation = 2.dp
-            ) {
-                val titleText = if (isEditing) stringResource(R.string.ui_redaktirovanie) else document?.let {
-                    com.poltorashka.documents.data.DocumentTemplates.documentTypeLabel(it.documentType, context.resources)
-                        .replace(" о ", " о\u00A0")
-                } ?: stringResource(R.string.ui_zagruzka)
-
-                // --- ИЗМЕНЕНО: Адаптивная шапка ---
-                if (isWideScreen) {
+            val titleText = if (isEditing) stringResource(R.string.ui_redaktirovanie) else document?.let {
+                com.poltorashka.documents.data.DocumentTemplates.documentTypeLabel(it.documentType, resources)
+                    .replace(" о ", " о\u00A0")
+            } ?: stringResource(R.string.ui_zagruzka)
+            if (isWideScreen) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
+                    shadowElevation = 2.dp
+                ) {
                     // РЕЖИМ ПЛАНШЕТА: Компактно, в одну строку
                     Row(
                         modifier = Modifier
@@ -301,7 +305,7 @@ fun DocumentDetailScreen(
                         Spacer(modifier = Modifier.width(16.dp))
 
                         Text(
-                            text = titleText, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            text = titleText, fontSize = 24.sp, fontFamily = HomeTitleFontFamily, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSecondaryContainer,
                             modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis
                         )
 
@@ -313,8 +317,8 @@ fun DocumentDetailScreen(
                                     Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) { Text(stringResource(R.string.ui_sokhranit), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary) }
                                 }
                             } else {
-                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp).bounceClick { showDeleteDocDialog = true }) {
-                                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.ui_udalit), tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
+                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.size(44.dp).bounceClick { showDeleteDocDialog = true }) {
+                                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.ui_udalit), tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(20.dp)) }
                                 }
                                 Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp).bounceClick { isEditing = true }) {
                                     Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.ui_redaktirovat), tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
@@ -322,47 +326,69 @@ fun DocumentDetailScreen(
                             }
                         }
                     }
-                } else {
-                    // РЕЖИМ СМАРТФОНА: Классически, в два этажа
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 80.dp, bottom = 24.dp, start = 24.dp, end = 24.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            Surface(
-                                shape = CircleShape, color = MaterialTheme.colorScheme.surface,
-                                modifier = Modifier.align(Alignment.CenterStart).size(44.dp).bounceClick { if (isEditing) isEditing = false else onBackClick() }
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(if (isEditing) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack, contentDescription = if (isEditing) stringResource(R.string.ui_otmena) else stringResource(R.string.ui_nazad), tint = MaterialTheme.colorScheme.onSurface)
-                                }
+                }
+            } else {
+                CollapsingNavigationHeader(
+                    title = titleText,
+                    scrollBehavior = headerScrollBehavior,
+                    navigationIcon = {
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.size(44.dp).bounceClick {
+                                if (isEditing) isEditing = false else onBackClick()
                             }
-
-                            Row(modifier = Modifier.align(Alignment.CenterEnd), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                if (isEditing) {
-                                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.height(44.dp).bounceClick { val formattedFields = editedFields.mapValues { (key, value) -> if (com.poltorashka.documents.data.DocumentTemplates.isDateField(key)) value.toDateString() else value }; document?.let { doc -> viewModel.updateFields(doc, formattedFields) }; isEditing = false }) {
-                                        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) { Text(stringResource(R.string.ui_sokhranit), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary) }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (isEditing) Icons.Filled.Close else Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = if (isEditing) stringResource(R.string.ui_otmena) else stringResource(R.string.ui_nazad),
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    },
+                    actions = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (isEditing) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.height(44.dp).bounceClick {
+                                        val formattedFields = editedFields.mapValues { (key, value) ->
+                                            if (com.poltorashka.documents.data.DocumentTemplates.isDateField(key)) value.toDateString() else value
+                                        }
+                                        document?.let { doc -> viewModel.updateFields(doc, formattedFields) }
+                                        isEditing = false
                                     }
-                                } else {
-                                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp).bounceClick { showDeleteDocDialog = true }) {
-                                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.ui_udalit), tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) {
+                                        Text(stringResource(R.string.ui_sokhranit), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
                                     }
-                                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp).bounceClick { isEditing = true }) {
-                                        Box(contentAlignment = Alignment.Center) { Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.ui_redaktirovat), tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp)) }
+                                }
+                            } else {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.errorContainer,
+                                    modifier = Modifier.size(44.dp).bounceClick { showDeleteDocDialog = true }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.ui_udalit), tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(44.dp).bounceClick { isEditing = true }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.ui_redaktirovat), tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(20.dp))
                                     }
                                 }
                             }
                         }
-
-                        Spacer(modifier = Modifier.height(24.dp))
-
-                        Text(
-                            text = titleText, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
                     }
-                }
-                // ----------------------------------------
+                )
             }
         },
         floatingActionButton = {
@@ -380,11 +406,11 @@ fun DocumentDetailScreen(
                             val finalLabels = orderedLabels + extraLabels
 
                             val shareText = StringBuilder().apply {
-                                append("${com.poltorashka.documents.data.DocumentTemplates.documentTypeLabel(doc.documentType, context.resources)}\n\n")
+                                append("${com.poltorashka.documents.data.DocumentTemplates.documentTypeLabel(doc.documentType, resources)}\n\n")
                                 finalLabels.forEach { key ->
                                     val value = doc.fieldsData[key]
                                     if (!value.isNullOrBlank()) {
-                                        append("${com.poltorashka.documents.data.DocumentTemplates.fieldLabel(key, context.resources)}: $value\n")
+                                        append("${com.poltorashka.documents.data.DocumentTemplates.fieldLabel(key, resources)}: $value\n")
                                     }
                                 }
                             }.toString()
@@ -393,7 +419,7 @@ fun DocumentDetailScreen(
                                 type = "text/plain"
                                 putExtra(Intent.EXTRA_TEXT, shareText)
                             }
-                            context.startActivity(Intent.createChooser(intent, context.getString(R.string.ui_podelitsya_dokumentom)))
+                            context.startActivity(Intent.createChooser(intent, resources.getString(R.string.ui_podelitsya_dokumentom)))
                         }
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -413,9 +439,17 @@ fun DocumentDetailScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
+                    .then(
+                        if (isWideScreen) Modifier else Modifier
+                            .padding(top = (innerPadding.calculateTopPadding() - HeaderCornerRadius).coerceAtLeast(0.dp))
+                            .clipToBounds()
+                    )
                     .verticalScroll(rememberScrollState())
             ) {
-                Spacer(modifier = Modifier.height(innerPadding.calculateTopPadding() + 24.dp))
+                Spacer(modifier = Modifier.height(
+                    if (isWideScreen) innerPadding.calculateTopPadding() + 24.dp
+                    else HeaderCornerRadius + 24.dp
+                ))
 
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
@@ -429,6 +463,13 @@ fun DocumentDetailScreen(
                         val displayLabels = finalLabels.filter { it != com.poltorashka.documents.data.DocumentTemplates.tagFieldKey }
 
                         if (isEditing) {
+                            Text(
+                                text = stringResource(R.string.document_form_data),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
                             val currentTag = editedFields[com.poltorashka.documents.data.DocumentTemplates.tagFieldKey] ?: ""
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -448,17 +489,11 @@ fun DocumentDetailScreen(
                                     }
                                 }
                                 Spacer(modifier = Modifier.width(16.dp))
-                                OutlinedTextField(
+                                DocumentFormTextField(
                                     value = currentTag,
                                     onValueChange = { newValue ->
-                                        if (newValue.isEmpty()) {
-                                            editedFields[com.poltorashka.documents.data.DocumentTemplates.tagFieldKey] = ""
-                                        } else {
-                                            val filtered = newValue.replace(Regex("[A-Za-zА-Яа-я0-9\\s\\.,!?\\-()'\"#@]"), "")
-                                            if (filtered.isNotEmpty()) {
-                                                val codePoint = filtered.codePointAt(0)
-                                                editedFields[com.poltorashka.documents.data.DocumentTemplates.tagFieldKey] = String(Character.toChars(codePoint))
-                                            }
+                                        emojiTagFromInput(newValue)?.let { tag ->
+                                            editedFields[com.poltorashka.documents.data.DocumentTemplates.tagFieldKey] = tag
                                         }
                                     },
                                     label = { Text(stringResource(R.string.ui_emodzi_teg)) },
@@ -475,7 +510,7 @@ fun DocumentDetailScreen(
                                 ) {
                                     rowLabels.forEach { label ->
                                         val isDateField = com.poltorashka.documents.data.DocumentTemplates.isDateField(label)
-                                        OutlinedTextField(
+                                        DocumentFormTextField(
                                             value = editedFields[label] ?: "",
                                             onValueChange = { newValue ->
                                                 if (isDateField) {
@@ -485,7 +520,7 @@ fun DocumentDetailScreen(
                                                     editedFields[label] = newValue
                                                 }
                                             },
-                                            label = { Text(com.poltorashka.documents.data.DocumentTemplates.fieldLabel(label, context.resources)) },
+                                            label = { Text(com.poltorashka.documents.data.DocumentTemplates.fieldLabel(label, resources)) },
                                             visualTransformation = if (isDateField) DateTransformation() else VisualTransformation.None,
                                             keyboardOptions = if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
                                             modifier = Modifier.weight(1f).padding(bottom = 8.dp)
@@ -509,14 +544,14 @@ fun DocumentDetailScreen(
                                             if (doc.fieldsData.containsKey(label)) {
                                                 val value = doc.fieldsData[label] ?: ""
                                                 DetailField(
-                                                    label = com.poltorashka.documents.data.DocumentTemplates.fieldLabel(label, context.resources),
+                                                    label = com.poltorashka.documents.data.DocumentTemplates.fieldLabel(label, resources),
                                                     value = value,
                                                     onCopy = { textToCopy ->
                                                         if (textToCopy.isNotBlank()) {
                                                             val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                                            val clip = android.content.ClipData.newPlainText(context.getString(R.string.ui_skopirovano), textToCopy)
+                                                            val clip = android.content.ClipData.newPlainText(resources.getString(R.string.ui_skopirovano), textToCopy)
                                                             clipboard.setPrimaryClip(clip)
-                                                            Toast.makeText(context, context.getString(R.string.ui_skopirovano), Toast.LENGTH_SHORT).show()
+                                                            Toast.makeText(context, resources.getString(R.string.ui_skopirovano), Toast.LENGTH_SHORT).show()
                                                         }
                                                     }
                                                 )
