@@ -1,9 +1,12 @@
 package com.poltorashka.documents
 
+import android.app.Activity
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.widget.Toast
+import android.view.SoundEffectConstants
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,11 +31,16 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -75,6 +83,8 @@ private fun saveEncryptedFile(context: Context, uri: Uri): String {
 fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Unit) {
     val context = LocalContext.current
     val resources = LocalResources.current
+    val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
     val database = remember(context) { AppDatabase.getDatabase(context) }
     val dao = remember(database) { database.documentDao() }
     val folderDao = remember(database) { database.folderDao() }
@@ -84,7 +94,30 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
     val destinationFolder = folders?.firstOrNull { it.id == profileId }
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
-    val headerScrollBehavior = rememberNavigationHeaderScrollBehavior()
+    var focusedFieldKey by remember { mutableStateOf<String?>(null) }
+    val imeVisible = WindowInsets.isImeVisible
+    val headerCanScroll by rememberUpdatedState(focusedFieldKey == null && !imeVisible)
+    val headerScrollBehavior =
+        rememberNavigationHeaderScrollBehavior(canScroll = { headerCanScroll })
+    val dateTransformation = remember { DateTransformation() }
+
+    // This form handles IME insets itself. Prevent the platform from panning the whole window.
+    val window = (context as? Activity)?.window
+    // Compose still needs this mode for IME inset delivery on older Android versions.
+    @Suppress("DEPRECATION")
+    val resizeMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+    DisposableEffect(window) {
+        val previousMode = window?.attributes?.softInputMode
+        if (window != null && previousMode != null) {
+            window.setSoftInputMode(
+                (previousMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST.inv()) or
+                        resizeMode
+            )
+        }
+        onDispose {
+            if (window != null && previousMode != null) window.setSoftInputMode(previousMode)
+        }
+    }
     val windowSize = LocalWindowInfo.current.containerSize
     val isWideScreen = with(LocalDensity.current) { windowSize.width.toDp() >= 600.dp }
     val columnsCount = if (isWideScreen) 2 else 1
@@ -95,6 +128,9 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
     var isSaving by remember { mutableStateOf(false) }
     val inputValues = remember { mutableStateMapOf<String, String>() }
     val currentFields = DocumentTemplates.getFieldsForType(selectedType)
+    val fieldNavigation = rememberDocumentFormNavigation(
+        listOf(DocumentTemplates.tagFieldKey) + currentFields.map { it.storageKey }
+    )
     var selectedImages by remember { mutableStateOf<List<Uri>>(emptyList()) }
     val filePickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -110,7 +146,11 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
             modifier = Modifier.size(44.dp)
         ) {
             IconButton(
-                onClick = onBackClick,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    onBackClick()
+                },
                 enabled = !isSaving,
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -193,7 +233,16 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                     placeholder = { Text(stringResource(R.string.ui_naprimer)) },
                     enabled = !isSaving,
                     singleLine = true,
-                    modifier = Modifier.weight(1f)
+                    keyboardOptions = fieldNavigation.keyboardOptions(DocumentTemplates.tagFieldKey),
+                    keyboardActions = fieldNavigation.keyboardActions(DocumentTemplates.tagFieldKey),
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(fieldNavigation.focusRequester(DocumentTemplates.tagFieldKey))
+                        .onFocusChanged { focus ->
+                            if (focus.isFocused) focusedFieldKey = DocumentTemplates.tagFieldKey
+                            else if (focusedFieldKey == DocumentTemplates.tagFieldKey) focusedFieldKey =
+                                null
+                        }
                 )
             }
         }
@@ -259,11 +308,13 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
     }
 
     Scaffold(
-        modifier = Modifier.then(
-            if (isWideScreen) Modifier else Modifier.nestedScroll(
-                headerScrollBehavior.nestedScrollConnection
-            )
-        ),
+        modifier = Modifier
+            .imePadding()
+            .then(
+                if (isWideScreen) Modifier else Modifier.nestedScroll(
+                    headerScrollBehavior.nestedScrollConnection
+                )
+            ),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             if (isWideScreen) {
@@ -310,7 +361,6 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                     modifier = Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .imePadding()
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -433,20 +483,33 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         rowFields.forEach { field ->
-                            val isDateField = DocumentTemplates.isDateField(field.storageKey)
-                            DocumentFormTextField(
-                                value = inputValues[field.storageKey] ?: "",
-                                onValueChange = { newValue ->
-                                    inputValues[field.storageKey] =
-                                        if (isDateField) newValue.filter(Char::isDigit)
-                                            .take(8) else newValue
-                                },
-                                label = { Text(stringResource(field.labelRes)) },
-                                visualTransformation = if (isDateField) DateTransformation() else VisualTransformation.None,
-                                keyboardOptions = if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
-                                enabled = !isSaving,
-                                modifier = Modifier.weight(1f)
-                            )
+                            key(selectedType, field.storageKey) {
+                                val isDateField = DocumentTemplates.isDateField(field.storageKey)
+                                DocumentFormTextField(
+                                    value = inputValues[field.storageKey] ?: "",
+                                    onValueChange = { newValue ->
+                                        inputValues[field.storageKey] =
+                                            if (isDateField) newValue.filter(Char::isDigit)
+                                                .take(8) else newValue
+                                    },
+                                    label = { Text(stringResource(field.labelRes)) },
+                                    visualTransformation = if (isDateField) dateTransformation else VisualTransformation.None,
+                                    keyboardOptions = fieldNavigation.keyboardOptions(
+                                        field.storageKey,
+                                        if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default
+                                    ),
+                                    keyboardActions = fieldNavigation.keyboardActions(field.storageKey),
+                                    enabled = !isSaving,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(fieldNavigation.focusRequester(field.storageKey))
+                                        .onFocusChanged { focus ->
+                                            if (focus.isFocused) focusedFieldKey = field.storageKey
+                                            else if (focusedFieldKey == field.storageKey) focusedFieldKey =
+                                                null
+                                        }
+                                )
+                            }
                         }
                         repeat(columnsCount - rowFields.size) { Spacer(Modifier.weight(1f)) }
                     }

@@ -55,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -463,6 +464,9 @@ fun DocumentDetailScreen(
                         val displayLabels = finalLabels.filter { it != com.poltorashka.documents.data.DocumentTemplates.tagFieldKey }
 
                         if (isEditing) {
+                            val tagFieldKey = com.poltorashka.documents.data.DocumentTemplates.tagFieldKey
+                            val fieldNavigation = rememberDocumentFormNavigation(listOf(tagFieldKey) + displayLabels)
+                            val dateTransformation = remember { DateTransformation() }
                             Text(
                                 text = stringResource(R.string.document_form_data),
                                 style = MaterialTheme.typography.titleLarge,
@@ -499,7 +503,10 @@ fun DocumentDetailScreen(
                                     label = { Text(stringResource(R.string.ui_emodzi_teg)) },
                                     placeholder = { Text(stringResource(R.string.ui_naprimer)) },
                                     singleLine = true,
+                                    keyboardOptions = fieldNavigation.keyboardOptions(tagFieldKey),
+                                    keyboardActions = fieldNavigation.keyboardActions(tagFieldKey),
                                     modifier = Modifier.weight(1f)
+                                        .focusRequester(fieldNavigation.focusRequester(tagFieldKey))
                                 )
                             }
 
@@ -521,9 +528,14 @@ fun DocumentDetailScreen(
                                                 }
                                             },
                                             label = { Text(com.poltorashka.documents.data.DocumentTemplates.fieldLabel(label, resources)) },
-                                            visualTransformation = if (isDateField) DateTransformation() else VisualTransformation.None,
-                                            keyboardOptions = if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
+                                            visualTransformation = if (isDateField) dateTransformation else VisualTransformation.None,
+                                            keyboardOptions = fieldNavigation.keyboardOptions(
+                                                label,
+                                                if (isDateField) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default
+                                            ),
+                                            keyboardActions = fieldNavigation.keyboardActions(label),
                                             modifier = Modifier.weight(1f).padding(bottom = 8.dp)
+                                                .focusRequester(fieldNavigation.focusRequester(label))
                                         )
                                     }
                                     if (rowLabels.size < columnsCount) {
