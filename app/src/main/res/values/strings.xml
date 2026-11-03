@@ -89,7 +89,6 @@
     <string name="ui_dobroy_nochi">Доброй ночи</string>
     <string name="ui_moi_dokumenty">Мои документы</string>
     <string name="ui_izmenit_poryadok_2">Изменить порядок</string>
-    <string name="ui_otkryvaem_seyf">Открываем сейф...</string>
     <string name="ui_net_papok">Нет папок</string>
     <string name="ui_pered_dobavleniem_pervogo_dokumenta_neobkhodimo">Перед добавлением первого документа необходимо создать папку в настройках приложения.</string>
     <string name="ui_otkryt_nastroyki">Открыть настройки</string>
@@ -220,4 +219,21 @@
     <string name="biometric_not_enrolled">Добавьте отпечаток или другой поддерживаемый способ биометрии в настройках устройства</string>
     <string name="biometric_security_update">Для биометрии требуется обновление безопасности устройства</string>
     <string name="biometric_unavailable">Биометрия недоступна</string>
+    <string name="custom_fields_title">Настроить поля</string>
+    <string name="custom_fields_hint">Добавляйте, переименовывайте и перемещайте поля. Удаление поля уберёт его значение после сохранения документа.</string>
+    <string name="custom_field_name">Название поля</string>
+    <string name="custom_field_up">Выше</string>
+    <string name="custom_field_down">Ниже</string>
+    <string name="custom_field_add">Добавить поле</string>
+    <string name="custom_fields_invalid">Названия должны быть непустыми и уникальными. Название «Тег» зарезервировано.</string>
+    <string name="custom_template_hint">Настройка шаблона применяется к новым документам «Другое». Существующие документы сохраняют свои поля.</string>
+    <string name="use_standard_template">Использовать стандартный шаблон</string>
+    <string name="custom_fields_gesture_hint">Удерживайте поле, чтобы изменить порядок. Смахните влево или нажмите ⋮, чтобы переименовать или удалить. Изменения применятся после сохранения.</string>
+    <string name="custom_field_name_example">Например, Номер договора</string>
+    <string name="folder_name_label">Название папки</string>
+    <string name="folder_name_example">Например, Семья</string>
+    <string name="startup_failed">Не удалось подготовить приложение. Попробуйте ещё раз.</string>
+    <string name="startup_retry">Повторить</string>
+    <string name="startup_preparing">Подготавливаем защищённое хранилище</string>
+    <string name="startup_failed_title">Не удалось загрузить</string>
 </resources>

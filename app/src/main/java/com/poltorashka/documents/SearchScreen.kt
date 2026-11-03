@@ -82,7 +82,8 @@ fun SearchScreen(
     )
 ) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    val allDocs by viewModel.allDocuments.collectAsState()
+    val homeState by viewModel.homeState.collectAsState()
+    val allDocs = homeState.allDocuments
     val resources = LocalResources.current
     val configuration = LocalConfiguration.current
     val gridState = rememberLazyGridState()

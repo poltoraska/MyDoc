@@ -202,15 +202,28 @@ fun DocumentDetailScreen(
     val isWideScreen = configuration.screenWidthDp >= 600
     val columnsCount = if (isWideScreen) 2 else 1
     val headerScrollBehavior = rememberNavigationHeaderScrollBehavior()
+    val documentScrollState = rememberScrollState()
 
     var imageToDelete by remember { mutableStateOf<String?>(null) }
     var isEditing by remember { mutableStateOf(false) }
     var showDeleteDocDialog by remember { mutableStateOf(false) }
     val editedFields = remember { mutableStateMapOf<String, String>() }
+    var otherFieldKeys by remember { mutableStateOf<List<String>>(emptyList()) }
+    var showFieldsEditor by remember { mutableStateOf(false) }
+
+    fun fieldsToSave(): Map<String, String> {
+        val values = if (document?.documentType == "Другое") remapDocumentFields(
+            editedFields.toMap(), otherFieldKeys.map { it to it }
+        ) else editedFields.toMap()
+        return values.mapValues { (key, value) ->
+            if (com.poltorashka.documents.data.DocumentTemplates.isDateField(key)) value.toDateString() else value
+        }
+    }
 
     LaunchedEffect(isEditing) {
         if (isEditing) {
             document?.fieldsData?.let { data ->
+                otherFieldKeys = data.keys.filter { it != com.poltorashka.documents.data.DocumentTemplates.tagFieldKey }
                 editedFields.clear()
                 data.forEach { (key, value) ->
                     if (com.poltorashka.documents.data.DocumentTemplates.isDateField(key)) {
@@ -272,6 +285,17 @@ fun DocumentDetailScreen(
         )
     }
 
+    if (showFieldsEditor && isEditing) {
+        CustomFieldsEditor(otherFieldKeys, onDismiss = { showFieldsEditor = false }, onApply = { fields ->
+            val remapped = remapDocumentFields(editedFields.toMap(), fields)
+            editedFields.clear()
+            editedFields.putAll(remapped)
+            otherFieldKeys = fields.map { it.second }
+            showFieldsEditor = false
+        })
+        return
+    }
+
     Scaffold(
         modifier = Modifier.then(if (isWideScreen) Modifier else Modifier.nestedScroll(headerScrollBehavior.nestedScrollConnection)),
         containerColor = MaterialTheme.colorScheme.background,
@@ -314,7 +338,7 @@ fun DocumentDetailScreen(
 
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (isEditing) {
-                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.height(44.dp).bounceClick { val formattedFields = editedFields.mapValues { (key, value) -> if (com.poltorashka.documents.data.DocumentTemplates.isDateField(key)) value.toDateString() else value }; document?.let { doc -> viewModel.updateFields(doc, formattedFields) }; isEditing = false }) {
+                                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary, modifier = Modifier.height(44.dp).bounceClick { val formattedFields = fieldsToSave(); document?.let { doc -> viewModel.updateFields(doc, formattedFields) }; isEditing = false }) {
                                     Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 20.dp)) { Text(stringResource(R.string.ui_sokhranit), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary) }
                                 }
                             } else {
@@ -356,9 +380,7 @@ fun DocumentDetailScreen(
                                     shape = CircleShape,
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.height(44.dp).bounceClick {
-                                        val formattedFields = editedFields.mapValues { (key, value) ->
-                                            if (com.poltorashka.documents.data.DocumentTemplates.isDateField(key)) value.toDateString() else value
-                                        }
+                                        val formattedFields = fieldsToSave()
                                         document?.let { doc -> viewModel.updateFields(doc, formattedFields) }
                                         isEditing = false
                                     }
@@ -404,7 +426,7 @@ fun DocumentDetailScreen(
                             val doc = document!!
                             val orderedLabels = com.poltorashka.documents.data.DocumentTemplates.getFieldsForType(doc.documentType).map { it.storageKey }
                             val extraLabels = doc.fieldsData.keys.filter { !orderedLabels.contains(it) }
-                            val finalLabels = orderedLabels + extraLabels
+                            val finalLabels = if (doc.documentType == "Другое") doc.fieldsData.keys.toList() else orderedLabels + extraLabels
 
                             val shareText = StringBuilder().apply {
                                 append("${com.poltorashka.documents.data.DocumentTemplates.documentTypeLabel(doc.documentType, resources)}\n\n")
@@ -445,7 +467,7 @@ fun DocumentDetailScreen(
                             .padding(top = (innerPadding.calculateTopPadding() - HeaderCornerRadius).coerceAtLeast(0.dp))
                             .clipToBounds()
                     )
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(documentScrollState)
             ) {
                 Spacer(modifier = Modifier.height(
                     if (isWideScreen) innerPadding.calculateTopPadding() + 24.dp
@@ -459,20 +481,40 @@ fun DocumentDetailScreen(
                     Column(modifier = Modifier.padding(20.dp)) {
                         val orderedLabels = com.poltorashka.documents.data.DocumentTemplates.getFieldsForType(doc.documentType).map { it.storageKey }
                         val extraLabels = doc.fieldsData.keys.filter { !orderedLabels.contains(it) }
-                        val finalLabels = orderedLabels + extraLabels
+                        val finalLabels = if (doc.documentType == "Другое") doc.fieldsData.keys.toList() else orderedLabels + extraLabels
 
-                        val displayLabels = finalLabels.filter { it != com.poltorashka.documents.data.DocumentTemplates.tagFieldKey }
+                        val displayLabels = if (doc.documentType == "Другое" && isEditing) otherFieldKeys
+                        else finalLabels.filter { it != com.poltorashka.documents.data.DocumentTemplates.tagFieldKey }
 
                         if (isEditing) {
                             val tagFieldKey = com.poltorashka.documents.data.DocumentTemplates.tagFieldKey
                             val fieldNavigation = rememberDocumentFormNavigation(listOf(tagFieldKey) + displayLabels)
                             val dateTransformation = remember { DateTransformation() }
-                            Text(
-                                text = stringResource(R.string.document_form_data),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
+                            if (isWideScreen) {
+                                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                                Text(
+                                    text = stringResource(R.string.document_form_data),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                    if (doc.documentType == "Другое") ConfigureFieldsButton(compact = true, onClick = { showFieldsEditor = true })
+                                }
+                            } else {
+                                Text(
+                                    text = stringResource(R.string.document_form_data),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier
+                                )
+                                if (doc.documentType == "Другое") {
+                                    Spacer(Modifier.height(12.dp))
+                                    ConfigureFieldsButton(compact = true, onClick = { showFieldsEditor = true })
+                                }
+                            }
                             Spacer(modifier = Modifier.height(16.dp))
                             val currentTag = editedFields[com.poltorashka.documents.data.DocumentTemplates.tagFieldKey] ?: ""
                             Row(

@@ -10,6 +10,8 @@ import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -127,7 +129,15 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
     var expanded by remember { mutableStateOf(false) }
     var isSaving by remember { mutableStateOf(false) }
     val inputValues = remember { mutableStateMapOf<String, String>() }
-    val currentFields = DocumentTemplates.getFieldsForType(selectedType)
+    val preferences = remember(context) { UserPreferences.getInstance(context) }
+    var otherFieldKeys by remember { mutableStateOf(preferences.otherDocumentFields) }
+    var useStandardTemplate by remember { mutableStateOf(false) }
+    val activeOtherFields = if (useStandardTemplate) DocumentTemplates.getFieldsForType("Другое").map { it.storageKey } else otherFieldKeys
+    var showFieldsEditor by remember { mutableStateOf(false) }
+    val currentFields = if (selectedType == "Другое") activeOtherFields.map {
+        com.poltorashka.documents.data.DocumentTemplateField(it, DocumentTemplates.fieldLabelRes(it) ?: 0)
+    } else DocumentTemplates.getFieldsForType(selectedType)
+
     val fieldNavigation = rememberDocumentFormNavigation(
         listOf(DocumentTemplates.tagFieldKey) + currentFields.map { it.storageKey }
     )
@@ -307,6 +317,19 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
         }
     }
 
+    if (showFieldsEditor) {
+        CustomFieldsEditor(activeOtherFields, onDismiss = { showFieldsEditor = false }, onApply = { fields ->
+            val remapped = remapDocumentFields(inputValues.toMap(), fields)
+            inputValues.clear()
+            inputValues.putAll(remapped)
+            useStandardTemplate = false
+            otherFieldKeys = fields.map { it.second }
+            preferences.otherDocumentFields = otherFieldKeys
+            showFieldsEditor = false
+        })
+        return
+    }
+
     Scaffold(
         modifier = Modifier
             .imePadding()
@@ -371,7 +394,10 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                                 // Snapshot the form before starting any suspending work.
                                 val typeToSave = selectedType
                                 val imagesToSave = selectedImages.toList()
-                                val fieldsToSave = inputValues.toMap().mapValues { (key, value) ->
+                                val valuesToSave = if (selectedType == "Другое") remapDocumentFields(
+                                    inputValues.toMap(), activeOtherFields.map { it to it }
+                                ) else inputValues.toMap()
+                                val fieldsToSave = valuesToSave.mapValues { (key, value) ->
                                     if (DocumentTemplates.isDateField(key)) value.toDateString() else value
                                 }
                                 isSaving = true
@@ -477,6 +503,36 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                 documentBlock()
             }
             DocumentFormSection(title = stringResource(R.string.document_form_data)) {
+                if (selectedType == "Другое") {
+                    val standardSelector = @Composable { modifier: Modifier ->
+                        Surface(modifier = modifier, shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().toggleable(
+                                value = useStandardTemplate, enabled = !isSaving, role = Role.Checkbox,
+                                onValueChange = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    useStandardTemplate = it
+                                }
+                            ).padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text(stringResource(R.string.use_standard_template), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                            Checkbox(checked = useStandardTemplate, onCheckedChange = null, enabled = !isSaving)
+                        }
+                    }
+                    }
+                    if (isWideScreen) {
+                        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            standardSelector(Modifier.weight(1f).fillMaxHeight())
+                            ConfigureFieldsButton(enabled = !isSaving, modifier = Modifier.weight(1f).fillMaxHeight(), onClick = { showFieldsEditor = true })
+                        }
+                    } else {
+                        standardSelector(Modifier.fillMaxWidth())
+                        ConfigureFieldsButton(enabled = !isSaving, onClick = { showFieldsEditor = true })
+                    }
+                    Text(stringResource(R.string.custom_template_hint), style = MaterialTheme.typography.bodySmall)
+                }
                 currentFields.chunked(columnsCount).forEach { rowFields ->
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -492,7 +548,7 @@ fun AddDocumentScreen(profileId: Int, onBackClick: () -> Unit, onSaved: () -> Un
                                             if (isDateField) newValue.filter(Char::isDigit)
                                                 .take(8) else newValue
                                     },
-                                    label = { Text(stringResource(field.labelRes)) },
+                                    label = { Text(DocumentTemplates.fieldLabel(field.storageKey, resources)) },
                                     visualTransformation = if (isDateField) dateTransformation else VisualTransformation.None,
                                     keyboardOptions = fieldNavigation.keyboardOptions(
                                         field.storageKey,

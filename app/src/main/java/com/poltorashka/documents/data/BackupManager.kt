@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.poltorashka.documents.StartupMaintenance
 import com.poltorashka.documents.FileSecurity
 import com.poltorashka.documents.data.AppDatabase
 import com.google.gson.Gson
@@ -46,6 +47,7 @@ object BackupManager {
         val dataDir = File(context.applicationInfo.dataDir)
         dataDir.listFiles { file -> file.isDirectory && file.name.startsWith("restore_previous_") }
             ?.forEach { rollback ->
+                StartupMaintenance.invalidate(context)
                 val committedMarker = File(dataDir, "${rollback.name}.committed")
                 if (!committedMarker.exists()) {
                     val manifest = File(rollback, "original_directories")
@@ -341,6 +343,7 @@ object BackupManager {
         password: String,
         masterKey: MasterKey
     ) = synchronized(installLock) {
+        StartupMaintenance.invalidate(context)
         val dataDir = File(context.applicationInfo.dataDir)
         val rollback = File(dataDir, "restore_previous_${UUID.randomUUID()}")
         check(rollback.mkdirs())

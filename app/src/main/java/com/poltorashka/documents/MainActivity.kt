@@ -33,7 +33,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -41,7 +40,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.createLifecycleAwareWindowRecomposer
-import androidx.lifecycle.lifecycleScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -54,8 +52,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.fragment.app.FragmentActivity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.withResumed
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -121,11 +124,13 @@ fun getGreetingIconResId(): Int {
 class MainActivity : FragmentActivity() {
     @OptIn(ExperimentalFoundationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
-        if (UserPreferences.getInstance(this).screenshotsBlocked) {
-            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
-        }
-        BackupManager.recoverInterruptedRestores(this)
+        // Keep even the initial loading window private until recovered preferences are available.
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        val startup = ViewModelProvider(this)[AppStartupViewModel::class.java]
+        var startupContentReady = false
+        splashScreen.setKeepOnScreenCondition { !startupContentReady }
 
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
@@ -138,17 +143,29 @@ class MainActivity : FragmentActivity() {
             )
         )
 
-        val motionPreferences = UserPreferences.getInstance(this)
-        val motionScale = AppMotionDurationScale(this, motionPreferences.animationsEnabled)
+        val motionScale = AppMotionDurationScale(this, false)
         lifecycle.addObserver(motionScale)
-        lifecycleScope.launch {
-            motionPreferences.animationsEnabledFlow.collect { motionScale.animationsEnabled = it }
-        }
         val appRecomposer = window.decorView.createLifecycleAwareWindowRecomposer(motionScale, lifecycle)
         setContent(parent = appRecomposer) {
             val context = LocalContext.current
             val resources = LocalResources.current
-            val prefs = remember { UserPreferences.getInstance(context) }
+            val startupState by startup.state.collectAsState()
+            val ready = startupState as? StartupState.Ready
+            if (startupState != StartupState.Loading) {
+                SideEffect { startupContentReady = true }
+            }
+            if (ready == null) {
+                StartupStatusScreen(failed = startupState == StartupState.Failed, onRetry = startup::retry)
+                return@setContent
+            }
+            val prefs = ready.preferences
+            SideEffect {
+                if (prefs.screenshotsBlocked) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            }
+            LaunchedEffect(prefs) {
+                prefs.animationsEnabledFlow.collect { motionScale.animationsEnabled = it }
+            }
             val themeMode by prefs.themeModeFlow.collectAsState()
             val dynamicColor by prefs.dynamicColorFlow.collectAsState()
             val animationsEnabled by prefs.animationsEnabledFlow.collectAsState()
@@ -162,6 +179,7 @@ class MainActivity : FragmentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     var isTimeoutLocked by remember { mutableStateOf(false) }
+                    var homeEntranceEpoch by remember { mutableIntStateOf(0) }
                     var isFirstOnStart by remember { mutableStateOf(true) }
                     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -234,26 +252,11 @@ class MainActivity : FragmentActivity() {
                             }
 
                             composable("main") {
-                                var attachmentsReady by remember { mutableStateOf(false) }
-                                LaunchedEffect(Unit) {
-                                    try {
-                                        withContext(Dispatchers.IO) {
-                                            DatabaseMigrator.encryptExistingPhotos(context)
-                                            AppDatabase.getDatabase(context).recoverOrphanDocuments(context)
-                                        }
-                                    } finally {
-                                        attachmentsReady = true
-                                    }
-                                }
-                                if (!attachmentsReady) {
-                                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                        CircularProgressIndicator()
-                                    }
-                                } else {
-                                val db = AppDatabase.getDatabase(context)
                                 val viewModel: DocumentsViewModel = viewModel(
-                                    factory = DocumentsViewModelFactory(db.documentDao(), db.folderDao())
+                                    factory = StartupDocumentsViewModelFactory(context)
                                 )
+                                val homeState by viewModel.homeState.collectAsState()
+                                val homeLoading = homeState.isLoading
                                 val pagerState = rememberPagerState(pageCount = { 3 })
                                 var retainedPageCount by remember { mutableIntStateOf(0) }
                                 LaunchedEffect(pagerState) {
@@ -269,11 +272,12 @@ class MainActivity : FragmentActivity() {
                                 var isRailExpanded by rememberSaveable { mutableStateOf(false) }
                                 val handleAddClick: () -> Unit = {
                                     coroutineScope.launch(Dispatchers.Main.immediate) {
+                                        if (homeLoading) return@launch
                                         val activeFolderId = viewModel.activeFolderId()
                                         if (activeFolderId != null) {
                                             navController.navigate("add/$activeFolderId")
                                         } else {
-                                            if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2)
+                                            if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) }
                                             android.widget.Toast.makeText(
                                                 context, resources.getString(R.string.create_folder_first),
                                                 android.widget.Toast.LENGTH_LONG
@@ -287,9 +291,10 @@ class MainActivity : FragmentActivity() {
                                     Row(modifier = Modifier.fillMaxSize()) {
                                         CustomSideNavigationRail(
                                             activeTab = pagerState.currentPage,
-                                            onHomeClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } },
-                                            onSearchClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } },
-                                            onSettingsClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } },
+                                            navigationEnabled = !homeLoading,
+                                            onHomeClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } } },
+                                            onSearchClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } } },
+                                            onSettingsClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } } },
                                             onAddClick = handleAddClick,
                                             isExpanded = isRailExpanded,
                                             onExpandedChange = { isRailExpanded = it }
@@ -297,14 +302,14 @@ class MainActivity : FragmentActivity() {
 
                                         HorizontalPager(
                                             state = pagerState,
-                                            beyondViewportPageCount = retainedPageCount,
+                                            beyondViewportPageCount = if (homeLoading) 0 else retainedPageCount,
                                             modifier = Modifier.weight(1f).fillMaxHeight(),
-                                            userScrollEnabled = true
+                                            userScrollEnabled = !homeLoading
                                         ) { page ->
                                             when (page) {
-                                                0 -> MainScreen(onDocumentClick = { id -> navController.navigate("detail/$id") }, onAddClick = { handleAddClick() }, onSettingsClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } }, onSearchClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } }, onReorderClick = { navController.navigate("reorder") }, viewModel = viewModel, availableWidthDp = configuration.screenWidthDp - (if (isRailExpanded) 256 else 80))
-                                                1 -> SearchScreen(onBackClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } }, onHomeClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } }, onSettingsClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } }, onAddClick = handleAddClick, onDocumentClick = { id -> navController.navigate("detail/$id") }, isWideLayout = true, viewModel = viewModel)
-                                                2 -> SettingsScreen(onBackClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } }, onHomeClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } }, onSearchClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } }, onAboutClick = { navController.navigate("about") }, isWideLayout = configuration.screenWidthDp - (if (isRailExpanded) 256 else 80) >= 520)
+                                                0 -> MainScreen(onDocumentClick = { id -> navController.navigate("detail/$id") }, onAddClick = { handleAddClick() }, onSettingsClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } } }, onSearchClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } } }, onReorderClick = { navController.navigate("reorder") }, viewModel = viewModel, entranceEpoch = homeEntranceEpoch, availableWidthDp = configuration.screenWidthDp - (if (isRailExpanded) 256 else 80))
+                                                1 -> SearchScreen(onBackClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } } }, onHomeClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } } }, onSettingsClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } } }, onAddClick = handleAddClick, onDocumentClick = { id -> navController.navigate("detail/$id") }, isWideLayout = true, viewModel = viewModel)
+                                                2 -> SettingsScreen(onBackClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } } }, onHomeClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } } }, onSearchClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } } }, onAboutClick = { navController.navigate("about") }, isWideLayout = configuration.screenWidthDp - (if (isRailExpanded) 256 else 80) >= 520)
                                             }
                                         }
                                     }
@@ -313,31 +318,32 @@ class MainActivity : FragmentActivity() {
                                     Box(modifier = Modifier.fillMaxSize()) {
                                         HorizontalPager(
                                             state = pagerState,
-                                            beyondViewportPageCount = retainedPageCount,
+                                            beyondViewportPageCount = if (homeLoading) 0 else retainedPageCount,
                                             modifier = Modifier.fillMaxSize(),
-                                            userScrollEnabled = true
+                                            userScrollEnabled = !homeLoading
                                         ) { page ->
                                             when (page) {
                                                 0 -> MainScreen(
                                                     onDocumentClick = { id -> navController.navigate("detail/$id") },
                                                     onAddClick = { handleAddClick() },
-                                                    onSettingsClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } },
-                                                    onSearchClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } },
+                                                    onSettingsClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } } },
+                                                    onSearchClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } } },
                                                     onReorderClick = { navController.navigate("reorder") },
+                                                    entranceEpoch = homeEntranceEpoch,
                                                     viewModel = viewModel
                                                 )
                                                 1 -> SearchScreen(
-                                                    onBackClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } },
-                                                    onHomeClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } },
-                                                    onSettingsClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } },
+                                                    onBackClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } } },
+                                                    onHomeClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } } },
+                                                    onSettingsClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } } },
                                                     onAddClick = handleAddClick,
                                                     onDocumentClick = { id -> navController.navigate("detail/$id") },
                                                     viewModel = viewModel
                                                 )
                                                 2 -> SettingsScreen(
-                                                    onBackClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } },
-                                                    onHomeClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } },
-                                                    onSearchClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } },
+                                                    onBackClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } } },
+                                                    onHomeClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } } },
+                                                    onSearchClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } } },
                                                     onAboutClick = { navController.navigate("about") }
                                                 )
                                             }
@@ -346,14 +352,14 @@ class MainActivity : FragmentActivity() {
                                         Box(modifier = Modifier.align(Alignment.BottomCenter)) {
                                             CustomFloatingToolbar(
                                                 activeTab = pagerState.currentPage,
-                                                onHomeClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } },
-                                                onSearchClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } },
-                                                onSettingsClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } },
+                                                navigationEnabled = !homeLoading,
+                                                onHomeClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } } },
+                                                onSearchClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } } },
+                                                onSettingsClick = { coroutineScope.launch { if (!homeLoading) { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } } },
                                                 onAddClick = handleAddClick
                                             )
                                         }
                                     }
-                                }
                                 }
                             }
 
@@ -423,6 +429,7 @@ class MainActivity : FragmentActivity() {
                                     verifyPin = prefs::verifyPin,
                                     isBiometricEnabled = prefs.isBiometricEnabled,
                                     onSuccess = {
+                                        homeEntranceEpoch++
                                         isTimeoutLocked = false
                                         prefs.backgroundTimestamp = System.currentTimeMillis()
                                     }
@@ -445,15 +452,15 @@ fun MainScreen(
     onSearchClick: () -> Unit,
     onReorderClick: () -> Unit,
     viewModel: DocumentsViewModel,
-    availableWidthDp: Int? = null
+    availableWidthDp: Int? = null,
+    entranceEpoch: Int = 0
 ) {
-    val folders by viewModel.folders.collectAsState()
-    val manualSelectedId by viewModel.selectedFolderId.collectAsState()
-    val docs by viewModel.documents.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val homeState by viewModel.homeState.collectAsState()
+    val folders = homeState.folders
+    val docs = homeState.documents
+    val isLoading = homeState.isLoading
 
-    val activeFolderId = manualSelectedId?.takeIf { id -> folders.any { it.id == id } }
-        ?: folders.firstOrNull()?.id
+    val activeFolderId = homeState.activeFolderId
     val folderSelectionPulse = remember { Animatable(0f) }
     var pulsingFolderId by remember { mutableStateOf<Int?>(null) }
     val selectionAnimationScope = rememberCoroutineScope()
@@ -657,7 +664,7 @@ fun MainScreen(
                             )
                         ) {
                             itemsIndexed(folders, key = { _, folder -> folder.id }) { index, folder ->
-                                StaggeredSpringAnimation(index = index, animationsEnabled = animationsEnabled) {
+                                StaggeredSpringAnimation(index = index, animationsEnabled = animationsEnabled, replayKey = entranceEpoch) {
                                     val selected = activeFolderId == folder.id
                                     val selectedWidth by animateDpAsState(
                                         targetValue = folderWidths[index] +
@@ -764,14 +771,8 @@ fun MainScreen(
                 .clipToBounds()
         ) {
             if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize().padding(top = HeaderCornerRadius, bottom = innerPadding.calculateBottomPadding()), contentAlignment = Alignment.Center) {
-                    Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), modifier = Modifier.padding(32.dp)) {
-                        Column(modifier = Modifier.padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp), strokeWidth = 4.dp, strokeCap = StrokeCap.Round)
-                            Spacer(modifier = Modifier.height(24.dp))
-                            Text(stringResource(R.string.ui_otkryvaem_seyf), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
+                Box(Modifier.fillMaxSize().padding(top = HeaderCornerRadius, bottom = innerPadding.calculateBottomPadding())) {
+                    StartupStatusScreen(failed = homeState.hasError, useCurrentTheme = true, onRetry = viewModel::retry)
                 }
             } else if (folders.isEmpty()) {
                 Box(
@@ -888,7 +889,7 @@ fun MainScreen(
                     )
                 ) {
                     itemsIndexed(docs, key = { _, doc -> doc.id }) { index, doc ->
-                        StaggeredSpringAnimation(index = index, animationsEnabled = animationsEnabled) {
+                        StaggeredSpringAnimation(index = index, animationsEnabled = animationsEnabled, replayKey = entranceEpoch) {
                             DocumentCard(document = doc, onClick = { onDocumentClick(doc.id) })
                         }
                     }
@@ -1266,6 +1267,7 @@ fun StaggeredSpringAnimation(
     index: Int,
     animationsEnabled: Boolean,
     modifier: Modifier = Modifier,
+    replayKey: Int = 0,
     content: @Composable () -> Unit
 ) {
 
@@ -1275,33 +1277,27 @@ fun StaggeredSpringAnimation(
         }
         return
     }
-    var isVisible by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
+    val scale = remember { Animatable(0.8f) }
+    val alpha = remember { Animatable(0f) }
+    LaunchedEffect(replayKey) {
+        // Reset only visual properties; retain card content, decoded images and list position.
+        alpha.snapTo(0f)
+        scale.snapTo(0.8f)
         delay(index * 40L)
-        isVisible = true
+        launch {
+            scale.animateTo(1f, spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessLow
+            ))
+        }
+        alpha.animateTo(1f, tween(durationMillis = 300))
     }
-
-    val scale by animateFloatAsState(
-        targetValue = if (isVisible) 1f else 0.8f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "scale_animation"
-    )
-
-    val alpha by animateFloatAsState(
-        targetValue = if (isVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = 300),
-        label = "alpha_animation"
-    )
 
     Box(
         modifier = modifier.graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-            this.alpha = alpha
+            scaleX = scale.value
+            scaleY = scale.value
+            this.alpha = alpha.value
         }
     ) {
         content()
@@ -1309,6 +1305,9 @@ fun StaggeredSpringAnimation(
 }
 
 // -- Навигационные панели --
+private fun Modifier.navigationPress(enabled: Boolean, onClick: () -> Unit): Modifier =
+    if (enabled) bounceClick(onClick) else alpha(0.55f).semantics { role = Role.Button; disabled() }
+
 
 @Composable
 fun CustomFloatingToolbar(
@@ -1316,7 +1315,8 @@ fun CustomFloatingToolbar(
     onHomeClick: () -> Unit,
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onAddClick: () -> Unit
+    onAddClick: () -> Unit,
+    navigationEnabled: Boolean = true
 ) {
     val scale = 1.10f
     val panelHeight = 64.dp * scale
@@ -1346,9 +1346,9 @@ fun CustomFloatingToolbar(
                 horizontalArrangement = Arrangement.spacedBy(4.dp * scale),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ToolbarNavItem(isSelected = activeTab == 0, icon = Icons.Filled.Home, label = stringResource(R.string.ui_glavnaya), onClick = onHomeClick, scale = scale)
-                ToolbarNavItem(isSelected = activeTab == 1, icon = Icons.Filled.Search, label = stringResource(R.string.ui_poisk), onClick = onSearchClick, scale = scale)
-                ToolbarNavItem(isSelected = activeTab == 2, icon = Icons.Filled.Settings, label = stringResource(R.string.ui_nastroyki), onClick = onSettingsClick, scale = scale)
+                ToolbarNavItem(isSelected = activeTab == 0, icon = Icons.Filled.Home, label = stringResource(R.string.ui_glavnaya), onClick = onHomeClick, scale = scale, enabled = true)
+                ToolbarNavItem(isSelected = activeTab == 1, icon = Icons.Filled.Search, label = stringResource(R.string.ui_poisk), onClick = onSearchClick, scale = scale, enabled = navigationEnabled)
+                ToolbarNavItem(isSelected = activeTab == 2, icon = Icons.Filled.Settings, label = stringResource(R.string.ui_nastroyki), onClick = onSettingsClick, scale = scale, enabled = navigationEnabled)
             }
         }
 
@@ -1360,7 +1360,7 @@ fun CustomFloatingToolbar(
             shadowElevation = 4.dp,
             modifier = Modifier
                 .size(plusButtonSize)
-                .bounceClick(onAddClick)
+                .navigationPress(navigationEnabled, onAddClick)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
@@ -1376,7 +1376,7 @@ fun CustomFloatingToolbar(
 
 // --- Компонент вкладки для Смартфона (Раскрывается по горизонтали) ---
 @Composable
-fun ToolbarNavItem(isSelected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, scale: Float) {
+fun ToolbarNavItem(isSelected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, scale: Float, enabled: Boolean = true) {
     val animationsEnabled = rememberAppAnimationsEnabled()
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
@@ -1397,7 +1397,7 @@ fun ToolbarNavItem(isSelected: Boolean, icon: androidx.compose.ui.graphics.vecto
             .height(48.dp * scale)
             .clip(CircleShape)
             .background(backgroundColor)
-            .bounceClick {
+            .navigationPress(enabled) {
                 if (!isSelected) {
                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                 }
@@ -1451,7 +1451,8 @@ fun CustomSideNavigationRail(
     onSettingsClick: () -> Unit,
     onAddClick: () -> Unit,
     isExpanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit
+    onExpandedChange: (Boolean) -> Unit,
+    navigationEnabled: Boolean = true
 ) {
     val animationsEnabled = rememberAppAnimationsEnabled()
     val railWidth by animateDpAsState(
@@ -1502,7 +1503,7 @@ fun CustomSideNavigationRail(
                     Modifier.fillMaxWidth().height(56.dp)
                 } else {
                     Modifier.size(56.dp)
-                }).bounceClick(onAddClick),
+                }).navigationPress(navigationEnabled, onAddClick),
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.primaryContainer
             ) {
@@ -1557,14 +1558,16 @@ fun CustomSideNavigationRail(
                     expanded = isExpanded,
                     icon = Icons.Filled.Search,
                     label = stringResource(R.string.ui_poisk),
-                    onClick = onSearchClick
+                    onClick = onSearchClick,
+                    enabled = navigationEnabled
                 )
                 RailNavItem(
                     isSelected = activeTab == 2,
                     expanded = isExpanded,
                     icon = Icons.Filled.Settings,
                     label = stringResource(R.string.ui_nastroyki),
-                    onClick = onSettingsClick
+                    onClick = onSettingsClick,
+                    enabled = navigationEnabled
                 )
             }
         }
@@ -1578,7 +1581,8 @@ fun RailNavItem(
     expanded: Boolean,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    enabled: Boolean = true
 ) {
     val animationsEnabled = rememberAppAnimationsEnabled()
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -1607,7 +1611,7 @@ fun RailNavItem(
                 .height(56.dp)
                 .clip(RoundedCornerShape(28.dp))
                 .background(backgroundColor)
-                .bounceClick(handleClick)
+                .navigationPress(enabled, handleClick)
                 .padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -1629,7 +1633,7 @@ fun RailNavItem(
         Column(
             modifier = Modifier
                 .width(64.dp)
-                .bounceClick(handleClick),
+                .navigationPress(enabled, handleClick),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(

@@ -142,4 +142,10 @@ class UserPreferences private constructor(context: Context) {
         get() = prefs.getBoolean("vibration_enabled", true)
         set(value) = prefs.edit().putBoolean("vibration_enabled", value).apply()
 
+    var otherDocumentFields: List<String>
+        get() = prefs.getString("other_document_fields", null)?.let { json ->
+            runCatching { com.google.gson.Gson().fromJson(json, Array<String>::class.java).toList() }.getOrNull()
+        } ?: com.poltorashka.documents.data.DocumentTemplates.getFieldsForType("Другое").map { it.storageKey }
+        set(value) = prefs.edit().putString("other_document_fields", com.google.gson.Gson().toJson(value)).apply()
+
 }

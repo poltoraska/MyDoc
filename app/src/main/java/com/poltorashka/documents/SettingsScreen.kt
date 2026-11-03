@@ -66,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
@@ -739,8 +740,13 @@ fun SettingsScreen(
             onDismissRequest = { showAddDialog = false; folderToEdit = null },
             title = { Text(if (folderToEdit != null) stringResource(R.string.ui_izmenit_papku) else stringResource(R.string.ui_novaya_papka)) },
             text = {
-                OutlinedTextField(
-                    value = folderNameInput, onValueChange = { folderNameInput = it }, label = { Text(stringResource(R.string.ui_vvedite_nazvanie_papki)) }, singleLine = true
+                DocumentFormTextField(
+                    value = folderNameInput,
+                    onValueChange = { folderNameInput = it },
+                    label = { Text(stringResource(R.string.folder_name_label)) },
+                    placeholder = { Text(stringResource(R.string.folder_name_example)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
             },
             confirmButton = {
@@ -780,12 +786,26 @@ fun CustomSwipeToRevealItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    SwipeToRevealRow(folder.id, folder.name, shape, isRevealed, onRevealChange, onEdit, onDelete)
+}
+
+@Composable
+internal fun SwipeToRevealRow(
+    itemKey: Any,
+    label: String,
+    shape: RoundedCornerShape,
+    isRevealed: Boolean,
+    onRevealChange: (Boolean) -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    containerColor: Color = MaterialTheme.colorScheme.surface
+) {
     val animationsEnabled = rememberAppAnimationsEnabled()
     val revealWidth = 144.dp
     val density = LocalDensity.current
     val revealWidthPx = with(density) { revealWidth.toPx() }
     val swipeThresholdPx = with(density) { 40.dp.toPx() }
-    val animatedOffset = remember(folder.id, revealWidthPx) {
+    val animatedOffset = remember(itemKey, revealWidthPx) {
         Animatable(if (isRevealed) -revealWidthPx else 0f)
     }
     val animationScope = rememberCoroutineScope()
@@ -880,7 +900,7 @@ fun CustomSwipeToRevealItem(
                 }
                 .clickable(enabled = isRevealed) { onRevealChange(false) },
             shape = shape,
-            color = MaterialTheme.colorScheme.surface
+            color = containerColor
         ) {
             Row(
                 modifier = Modifier.fillMaxSize().padding(start = 20.dp, end = 8.dp),
@@ -888,7 +908,7 @@ fun CustomSwipeToRevealItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = folder.name,
+                    text = label,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,

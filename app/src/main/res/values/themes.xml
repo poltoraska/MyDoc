@@ -4,4 +4,9 @@
         <!-- Указываем фон окна до загрузки Compose -->
         <item name="android:windowBackground">@color/splash_background_light</item>
     </style>
+    <style name="Theme.Documents.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background_light</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.Documents</item>
+    </style>
 </resources>
