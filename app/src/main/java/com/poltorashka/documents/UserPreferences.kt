@@ -36,6 +36,8 @@ class UserPreferences private constructor(context: Context) {
     val userNameFlow = userNameState.asStateFlow()
     private val animationsEnabledState = MutableStateFlow(prefs.getBoolean("animations_enabled", true))
     val animationsEnabledFlow = animationsEnabledState.asStateFlow()
+    private val vibrationEnabledState = MutableStateFlow(prefs.getBoolean("vibration_enabled", true))
+    val vibrationEnabledFlow = vibrationEnabledState.asStateFlow()
     private val themeModeState = MutableStateFlow(prefs.getInt("theme_mode", 0))
     val themeModeFlow = themeModeState.asStateFlow()
     private val dynamicColorState = MutableStateFlow(prefs.getBoolean("use_dynamic_color", true))
@@ -43,6 +45,7 @@ class UserPreferences private constructor(context: Context) {
     private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == null || key == "USER_NAME") userNameState.value = userName
         if (key == null || key == "animations_enabled") animationsEnabledState.value = animationsEnabled
+        if (key == null || key == "vibration_enabled") vibrationEnabledState.value = vibrationEnabled
         if (key == null || key == "theme_mode") themeModeState.value = themeMode
         if (key == null || key == "use_dynamic_color") dynamicColorState.value = useDynamicColor
     }
@@ -131,4 +134,12 @@ class UserPreferences private constructor(context: Context) {
     var animationsEnabled: Boolean
         get() = prefs.getBoolean("animations_enabled", true)
         set(value) = prefs.edit().putBoolean("animations_enabled", value).apply()
+    var screenshotsBlocked: Boolean
+        get() = prefs.getBoolean("screenshots_blocked", false)
+        set(value) = prefs.edit().putBoolean("screenshots_blocked", value).apply()
+
+    var vibrationEnabled: Boolean
+        get() = prefs.getBoolean("vibration_enabled", true)
+        set(value) = prefs.edit().putBoolean("vibration_enabled", value).apply()
+
 }

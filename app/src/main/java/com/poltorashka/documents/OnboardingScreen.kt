@@ -57,22 +57,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import bounceClick
 import kotlinx.coroutines.launch
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
@@ -158,11 +144,15 @@ fun WelcomeStep(onNext: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(16.dp)) // Уменьшили с 24.dp
 
-                    AnimatedWavyLine(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(32.dp)
-                            .padding(horizontal = 32.dp)
+                    SineWaveLine(
+                        modifier = Modifier.fillMaxWidth().height(24.dp).padding(horizontal = 32.dp),
+                        animate = true,
+                        color = MaterialTheme.colorScheme.primary,
+                        alpha = 0.8f,
+                        strokeWidth = 3.dp,
+                        amplitude = 3.dp,
+                        waves = 7.6f,
+                        phase = 0f
                     )
 
                     Spacer(modifier = Modifier.height(24.dp)) // Уменьшили с 32.dp
@@ -424,6 +414,17 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
                             .height(180.dp),
                         contentScale = ContentScale.Fit
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SineWaveLine(
+                        modifier = Modifier.fillMaxWidth().height(24.dp),
+                        animate = true,
+                        color = MaterialTheme.colorScheme.primary,
+                        alpha = 0.8f,
+                        strokeWidth = 3.dp,
+                        amplitude = 3.dp,
+                        waves = 7.6f,
+                        phase = 0f
+                    )
                 }
 
                 // --- НИЖНИЙ БЛОК (Кнопка Далее и Восстановление) ---
@@ -537,69 +538,6 @@ fun NameSetupStep(onFinish: (String) -> Unit) {
             dismissButton = {
                 TextButton(onClick = { showRestoreDialog = false; selectedRestoreUri = null }) { Text(stringResource(R.string.ui_otmena)) }
             }
-        )
-    }
-}
-
-@Composable
-fun AnimatedWavyLine(modifier: Modifier = Modifier) {
-    val infiniteTransition = rememberInfiniteTransition(label = "wave_transition")
-    val phase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f, // Один полный цикл анимации
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "wave_phase"
-    )
-
-    val waveColor = MaterialTheme.colorScheme.primary
-
-    Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-
-        // Защита от нулевого размера при первичной отрисовке
-        if (width <= 0f || height <= 0f) return@Canvas
-
-        val strokeWidthPx = 4.dp.toPx()
-        val waveWidthPx = 140.dp.toPx() // Жесткая ширина одного витка волны
-
-        // Вычитаем толщину линии, чтобы волна не срезалась сверху и снизу
-        val amplitude = (height - strokeWidthPx) / 2f
-        val centerY = height / 2f
-
-        val path = Path()
-
-        // Сдвиг фазы в радианах (от 0 до 2π)
-        val phaseShift = phase * 2 * Math.PI
-        // Частота: один полный цикл (2π) каждые 140.dp
-        val frequency = (2 * Math.PI) / waveWidthPx
-
-        var isFirst = true
-
-        // Рисуем волну поточечно (с шагом 3 пикселя для идеальной плавности)
-        for (x in 0..width.toInt() step 3) {
-            // Формула синуса, которая идеально вписывается в заданные рамки
-            val y = centerY + (Math.sin(x * frequency - phaseShift).toFloat() * amplitude)
-
-            if (isFirst) {
-                path.moveTo(x.toFloat(), y) // Начинаем СТРОГО от нуля!
-                isFirst = false
-            } else {
-                path.lineTo(x.toFloat(), y)
-            }
-        }
-
-        drawPath(
-            path = path,
-            color = waveColor,
-            style = Stroke(
-                width = strokeWidthPx,
-                cap = StrokeCap.Round,
-                join = StrokeJoin.Round
-            )
         )
     }
 }

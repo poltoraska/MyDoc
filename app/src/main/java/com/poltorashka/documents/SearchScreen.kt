@@ -118,6 +118,7 @@ fun SearchScreen(
         topBar = {
             Surface(
                 modifier = Modifier
+                    .keepHorizontalGesturesInHeader()
                     .fillMaxWidth()
                     .padding(horizontal = if (isWideLayout) 16.dp else 0.dp)
                     .then(

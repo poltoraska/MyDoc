@@ -6,7 +6,6 @@ import android.os.Bundle
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -41,6 +40,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.createLifecycleAwareWindowRecomposer
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -52,9 +53,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.withResumed
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -118,6 +122,9 @@ class MainActivity : FragmentActivity() {
     @OptIn(ExperimentalFoundationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (UserPreferences.getInstance(this).screenshotsBlocked) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
         BackupManager.recoverInterruptedRestores(this)
 
         enableEdgeToEdge(
@@ -131,12 +138,20 @@ class MainActivity : FragmentActivity() {
             )
         )
 
-        setContent {
+        val motionPreferences = UserPreferences.getInstance(this)
+        val motionScale = AppMotionDurationScale(this, motionPreferences.animationsEnabled)
+        lifecycle.addObserver(motionScale)
+        lifecycleScope.launch {
+            motionPreferences.animationsEnabledFlow.collect { motionScale.animationsEnabled = it }
+        }
+        val appRecomposer = window.decorView.createLifecycleAwareWindowRecomposer(motionScale, lifecycle)
+        setContent(parent = appRecomposer) {
             val context = LocalContext.current
             val resources = LocalResources.current
             val prefs = remember { UserPreferences.getInstance(context) }
             val themeMode by prefs.themeModeFlow.collectAsState()
             val dynamicColor by prefs.dynamicColorFlow.collectAsState()
+            val animationsEnabled by prefs.animationsEnabledFlow.collectAsState()
 
             DocumentsTheme(
                 themeMode = themeMode,
@@ -186,24 +201,26 @@ class MainActivity : FragmentActivity() {
                             navController = navController,
                             startDestination = startScreen,
                             enterTransition = {
-                                if (initialState.destination.route in tabRoutes && targetState.destination.route in tabRoutes) {
+                                if (!animationsEnabled) EnterTransition.None
+                                else if (initialState.destination.route in tabRoutes && targetState.destination.route in tabRoutes) {
                                     fadeIn(animationSpec = tween(300))
                                 } else {
                                     slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(400))
                                 }
                             },
                             exitTransition = {
-                                if (initialState.destination.route in tabRoutes && targetState.destination.route in tabRoutes) {
+                                if (!animationsEnabled) ExitTransition.None
+                                else if (initialState.destination.route in tabRoutes && targetState.destination.route in tabRoutes) {
                                     fadeOut(animationSpec = tween(300))
                                 } else {
                                     slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(400))
                                 }
                             },
                             popEnterTransition = {
-                                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(400))
+                                if (!animationsEnabled) EnterTransition.None else slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(400))
                             },
                             popExitTransition = {
-                                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(400))
+                                if (!animationsEnabled) ExitTransition.None else slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(400))
                             }
                         ) {
                             composable("onboarding") {
@@ -256,7 +273,7 @@ class MainActivity : FragmentActivity() {
                                         if (activeFolderId != null) {
                                             navController.navigate("add/$activeFolderId")
                                         } else {
-                                            pagerState.animateScrollToPage(2)
+                                            if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2)
                                             android.widget.Toast.makeText(
                                                 context, resources.getString(R.string.create_folder_first),
                                                 android.widget.Toast.LENGTH_LONG
@@ -270,9 +287,9 @@ class MainActivity : FragmentActivity() {
                                     Row(modifier = Modifier.fillMaxSize()) {
                                         CustomSideNavigationRail(
                                             activeTab = pagerState.currentPage,
-                                            onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                                            onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                                            onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
+                                            onHomeClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } },
+                                            onSearchClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } },
+                                            onSettingsClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } },
                                             onAddClick = handleAddClick,
                                             isExpanded = isRailExpanded,
                                             onExpandedChange = { isRailExpanded = it }
@@ -285,9 +302,9 @@ class MainActivity : FragmentActivity() {
                                             userScrollEnabled = true
                                         ) { page ->
                                             when (page) {
-                                                0 -> MainScreen(onDocumentClick = { id -> navController.navigate("detail/$id") }, onAddClick = { handleAddClick() }, onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } }, onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } }, onReorderClick = { navController.navigate("reorder") }, viewModel = viewModel, availableWidthDp = configuration.screenWidthDp - (if (isRailExpanded) 256 else 80))
-                                                1 -> SearchScreen(onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } }, onAddClick = handleAddClick, onDocumentClick = { id -> navController.navigate("detail/$id") }, isWideLayout = true, viewModel = viewModel)
-                                                2 -> SettingsScreen(onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } }, onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } }, onAboutClick = { navController.navigate("about") }, isWideLayout = configuration.screenWidthDp - (if (isRailExpanded) 256 else 80) >= 520)
+                                                0 -> MainScreen(onDocumentClick = { id -> navController.navigate("detail/$id") }, onAddClick = { handleAddClick() }, onSettingsClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } }, onSearchClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } }, onReorderClick = { navController.navigate("reorder") }, viewModel = viewModel, availableWidthDp = configuration.screenWidthDp - (if (isRailExpanded) 256 else 80))
+                                                1 -> SearchScreen(onBackClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } }, onHomeClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } }, onSettingsClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } }, onAddClick = handleAddClick, onDocumentClick = { id -> navController.navigate("detail/$id") }, isWideLayout = true, viewModel = viewModel)
+                                                2 -> SettingsScreen(onBackClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } }, onHomeClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } }, onSearchClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } }, onAboutClick = { navController.navigate("about") }, isWideLayout = configuration.screenWidthDp - (if (isRailExpanded) 256 else 80) >= 520)
                                             }
                                         }
                                     }
@@ -304,23 +321,23 @@ class MainActivity : FragmentActivity() {
                                                 0 -> MainScreen(
                                                     onDocumentClick = { id -> navController.navigate("detail/$id") },
                                                     onAddClick = { handleAddClick() },
-                                                    onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
-                                                    onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                                                    onSettingsClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } },
+                                                    onSearchClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } },
                                                     onReorderClick = { navController.navigate("reorder") },
                                                     viewModel = viewModel
                                                 )
                                                 1 -> SearchScreen(
-                                                    onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                                                    onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                                                    onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
+                                                    onBackClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } },
+                                                    onHomeClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } },
+                                                    onSettingsClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } },
                                                     onAddClick = handleAddClick,
                                                     onDocumentClick = { id -> navController.navigate("detail/$id") },
                                                     viewModel = viewModel
                                                 )
                                                 2 -> SettingsScreen(
-                                                    onBackClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                                                    onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                                                    onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                                                    onBackClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } },
+                                                    onHomeClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } },
+                                                    onSearchClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } },
                                                     onAboutClick = { navController.navigate("about") }
                                                 )
                                             }
@@ -329,9 +346,9 @@ class MainActivity : FragmentActivity() {
                                         Box(modifier = Modifier.align(Alignment.BottomCenter)) {
                                             CustomFloatingToolbar(
                                                 activeTab = pagerState.currentPage,
-                                                onHomeClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                                                onSearchClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                                                onSettingsClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
+                                                onHomeClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(0) else pagerState.scrollToPage(0) } },
+                                                onSearchClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(1) else pagerState.scrollToPage(1) } },
+                                                onSettingsClick = { coroutineScope.launch { if (animationsEnabled) pagerState.animateScrollToPage(2) else pagerState.scrollToPage(2) } },
                                                 onAddClick = handleAddClick
                                             )
                                         }
@@ -451,20 +468,20 @@ fun MainScreen(
     // Вычисление отступов для планшета
     val headerHorizontalPadding = if (isWideLayout) 16.dp else 24.dp
     val contentLeftPadding = 16.dp
-    val minFolderWidth = 112.dp
-    val minFolderCompressionWidth = 96.dp
+    val minFolderWidth = 64.dp
+    val folderCompressionReserve = 8.dp
     val maxFolderWidth = (
         (availableWidthDp ?: configuration.screenWidthDp).dp -
             headerHorizontalPadding - headerHorizontalPadding -
             if (isWideLayout) 32.dp else 0.dp
         )
-        .coerceAtMost(360.dp)
-        .coerceAtLeast(240.dp)
+        .coerceAtMost(240.dp)
+        .coerceAtLeast(minFolderWidth)
     val folderHorizontalPadding = 24.dp
     val folderLabelStyle = MaterialTheme.typography.labelLarge
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    val folderWidths = remember(
+    val folderMinimumWidths = remember(
         folders,
         folderLabelStyle,
         density,
@@ -474,25 +491,31 @@ fun MainScreen(
         folderHorizontalPadding
     ) {
         folders.map { folder ->
-            val textWidthPx = textMeasurer.measure(
-                text = folder.name,
-                style = folderLabelStyle,
-                softWrap = false,
-                maxLines = 1
-            ).size.width
+            // Reserve enough space for either weight so selection cannot truncate a label.
+            val textWidthPx = listOf(FontWeight.Medium, FontWeight.SemiBold).maxOf { weight ->
+                textMeasurer.measure(
+                    text = folder.name,
+                    style = folderLabelStyle.copy(fontWeight = weight),
+                    softWrap = false,
+                    maxLines = 1
+                ).size.width
+            }
             with(density) {
-                (textWidthPx.toDp() + folderHorizontalPadding * 2)
+                (textWidthPx.toDp() + folderHorizontalPadding * 2 + 2.dp)
                     .coerceIn(minFolderWidth, maxFolderWidth)
             }
         }
     }
+    val folderWidths = remember(folderMinimumWidths, maxFolderWidth) {
+        folderMinimumWidths.map { (it + folderCompressionReserve).coerceAtMost(maxFolderWidth) }
+    }
     val activeFolderIndex = folders.indexOfFirst { it.id == activeFolderId }
-    val folderSelectionExpansion = remember(folderWidths, activeFolderIndex, maxFolderWidth) {
+    val folderSelectionExpansion = remember(folderWidths, folderMinimumWidths, activeFolderIndex, maxFolderWidth) {
         if (activeFolderIndex in folderWidths.indices) {
             val neighbors = listOf(activeFolderIndex - 1, activeFolderIndex + 1)
                 .filter { it in folderWidths.indices }
             val neighborCompressionCapacity = neighbors.sumOf { index ->
-                (folderWidths[index] - minFolderCompressionWidth).value.coerceAtLeast(0f).toDouble()
+                (folderWidths[index] - folderMinimumWidths[index]).value.coerceAtLeast(0f).toDouble()
             }.toFloat()
             minOf(
                 24.dp.value,
@@ -504,17 +527,17 @@ fun MainScreen(
             0.dp
         }
     }
-    val folderCompressionAmounts = remember(folderWidths, activeFolderIndex, folderSelectionExpansion) {
+    val folderCompressionAmounts = remember(folderWidths, folderMinimumWidths, activeFolderIndex, folderSelectionExpansion) {
         val amounts = MutableList(folders.size) { 0.dp }
         if (activeFolderIndex in folderWidths.indices) {
             val neighbors = listOf(activeFolderIndex - 1, activeFolderIndex + 1)
                 .filter { it in folderWidths.indices }
             val capacityTotal = neighbors.sumOf { index ->
-                (folderWidths[index] - minFolderCompressionWidth).value.coerceAtLeast(0f).toDouble()
+                (folderWidths[index] - folderMinimumWidths[index]).value.coerceAtLeast(0f).toDouble()
             }.toFloat()
             if (capacityTotal > 0f) {
                 neighbors.forEach { index ->
-                    val capacity = (folderWidths[index] - minFolderCompressionWidth).value.coerceAtLeast(0f)
+                    val capacity = (folderWidths[index] - folderMinimumWidths[index]).value.coerceAtLeast(0f)
                     amounts[index] = folderSelectionExpansion * (capacity / capacityTotal)
                 }
             }
@@ -538,6 +561,7 @@ fun MainScreen(
         topBar = {
             Surface(
                 modifier = Modifier
+                    .keepHorizontalGesturesInHeader()
                     .fillMaxWidth()
                     .padding(horizontal = if (isWideLayout) 16.dp else 0.dp)
                     .then(
@@ -639,10 +663,10 @@ fun MainScreen(
                                         targetValue = folderWidths[index] +
                                             (if (selected) folderSelectionExpansion else 0.dp) -
                                             folderCompressionAmounts[index],
-                                        animationSpec = spring(
+                                        animationSpec = if (animationsEnabled) spring(
                                             dampingRatio = Spring.DampingRatioLowBouncy,
                                             stiffness = Spring.StiffnessMediumLow
-                                        ),
+                                        ) else snap(),
                                         label = "selectedFolderWidth"
                                     )
                                     val pulse = if (pulsingFolderId == activeFolderId) {
@@ -652,7 +676,7 @@ fun MainScreen(
                                     }
                                     val animatedWidth = (
                                         selectedWidth - folderCompressionAmounts[index] * 0.25f * pulse
-                                    ).coerceAtLeast(minFolderCompressionWidth)
+                                    ).coerceAtLeast(folderMinimumWidths[index])
                                     val shapes = when {
                                         folders.size == 1 -> ToggleButtonShapes(
                                             shape = RoundedCornerShape(24.dp),
@@ -671,7 +695,7 @@ fun MainScreen(
                                             if (isChecked) {
                                                 viewModel.selectFolder(folder.id)
                                                 pulsingFolderId = folder.id
-                                                selectionAnimationScope.launch {
+                                                if (animationsEnabled) selectionAnimationScope.launch {
                                                     folderSelectionPulse.snapTo(0f)
                                                     folderSelectionPulse.animateTo(
                                                         targetValue = 1f,
@@ -1146,10 +1170,19 @@ fun AuthScreen(verifyPin: (String) -> Boolean, isBiometricEnabled: Boolean, onSu
     val context = LocalContext.current
     val activity = context as? FragmentActivity
 
-    LaunchedEffect(Unit) {
+    var biometricMessage by remember { mutableStateOf<String?>(null) }
+    val currentOnSuccess by rememberUpdatedState(onSuccess)
+    val biometric = remember(activity) {
+        activity?.let {
+            BiometricSignIn(it, onSuccess = { currentOnSuccess() }, onMessage = { biometricMessage = it })
+        }
+    }
+    DisposableEffect(biometric) {
+        onDispose { biometric?.dispose() }
+    }
+    LaunchedEffect(biometric, isBiometricEnabled) {
         if (isBiometricEnabled && activity != null) {
-            delay(300)
-            showBiometricPrompt(activity, onSuccess)
+            activity.lifecycle.withResumed { biometric?.authenticate() }
         }
     }
 
@@ -1195,12 +1228,21 @@ fun AuthScreen(verifyPin: (String) -> Boolean, isBiometricEnabled: Boolean, onSu
 
                 Spacer(modifier = Modifier.height(16.dp))
                 PinDots(pinLength = pinInput.length, isError = isError)
+                biometricMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }
+                    )
+                }
+
 
                 Spacer(modifier = Modifier.weight(1f))
 
                 CustomNumpad(
                     isBiometricEnabled = isBiometricEnabled,
-                    onBiometricClick = { if (activity != null) showBiometricPrompt(activity, onSuccess) },
+                    onBiometricClick = { biometric?.authenticate() },
                     onNumberClick = { digit ->
                         if (pinInput.length < 4 && !isError) {
                             pinInput += digit
@@ -1217,28 +1259,6 @@ fun AuthScreen(verifyPin: (String) -> Boolean, isBiometricEnabled: Boolean, onSu
             }
         }
     }
-}
-
-fun showBiometricPrompt(activity: FragmentActivity, onSuccess: () -> Unit) {
-    val executor = ContextCompat.getMainExecutor(activity)
-    val biometricPrompt = BiometricPrompt(
-        activity,
-        executor,
-        object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                super.onAuthenticationSucceeded(result)
-                onSuccess()
-            }
-        }
-    )
-
-    val promptInfo = BiometricPrompt.PromptInfo.Builder()
-        .setTitle(activity.getString(R.string.ui_vkhod_v_dokumenty))
-        .setSubtitle(activity.getString(R.string.ui_prilozhite_palets_ili_posmotrite_na_ekran))
-        .setNegativeButtonText(activity.getString(R.string.ui_ispolzovat_pin_kod))
-        .build()
-
-    biometricPrompt.authenticate(promptInfo)
 }
 
 @Composable
@@ -1357,15 +1377,18 @@ fun CustomFloatingToolbar(
 // --- Компонент вкладки для Смартфона (Раскрывается по горизонтали) ---
 @Composable
 fun ToolbarNavItem(isSelected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, scale: Float) {
+    val animationsEnabled = rememberAppAnimationsEnabled()
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     // Плавная смена цветов
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        animationSpec = if (animationsEnabled) spring() else snap(),
         label = "nav_bg"
     )
     val contentColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = if (animationsEnabled) spring() else snap(),
         label = "nav_content"
     )
 
@@ -1383,12 +1406,12 @@ fun ToolbarNavItem(isSelected: Boolean, icon: androidx.compose.ui.graphics.vecto
             // Динамические отступы: больше места, если вкладка открыта
             .padding(horizontal = if (isSelected) (16.dp * scale) else (12.dp * scale))
             // МАГИЯ: Автоматическая пружинная анимация изменения ширины
-            .animateContentSize(
+            .then(if (animationsEnabled) Modifier.animateContentSize(
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioLowBouncy,
                     stiffness = Spring.StiffnessLow
                 )
-            ),
+            ) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
@@ -1400,7 +1423,7 @@ fun ToolbarNavItem(isSelected: Boolean, icon: androidx.compose.ui.graphics.vecto
         )
 
         // Плавно показывает текст только у активной вкладки
-        AnimatedVisibility(visible = isSelected) {
+        val selectedLabel = @Composable {
             Row {
                 Spacer(modifier = Modifier.width(8.dp * scale))
                 Text(
@@ -1410,6 +1433,11 @@ fun ToolbarNavItem(isSelected: Boolean, icon: androidx.compose.ui.graphics.vecto
                     fontSize = 14.sp
                 )
             }
+        }
+        if (animationsEnabled) {
+            AnimatedVisibility(visible = isSelected) { selectedLabel() }
+        } else if (isSelected) {
+            selectedLabel()
         }
     }
 }
@@ -1425,12 +1453,13 @@ fun CustomSideNavigationRail(
     isExpanded: Boolean,
     onExpandedChange: (Boolean) -> Unit
 ) {
+    val animationsEnabled = rememberAppAnimationsEnabled()
     val railWidth by animateDpAsState(
         targetValue = if (isExpanded) 256.dp else 80.dp,
-        animationSpec = spring(
+        animationSpec = if (animationsEnabled) spring(
             dampingRatio = Spring.DampingRatioLowBouncy,
             stiffness = Spring.StiffnessMediumLow
-        ),
+        ) else snap(),
         label = "navigationRailWidth"
     )
     val railHorizontalPadding = if (isExpanded) 20.dp else 8.dp
@@ -1551,13 +1580,16 @@ fun RailNavItem(
     label: String,
     onClick: () -> Unit
 ) {
+    val animationsEnabled = rememberAppAnimationsEnabled()
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+        animationSpec = if (animationsEnabled) spring() else snap(),
         label = "rail_bg"
     )
     val contentColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = if (animationsEnabled) spring() else snap(),
         label = "rail_content"
     )
     val labelColor = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant

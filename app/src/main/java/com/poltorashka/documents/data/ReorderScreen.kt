@@ -48,6 +48,7 @@ fun ReorderScreen(
     onBackClick: () -> Unit,
     viewModel: DocumentsViewModel
 ) {
+    val animationsEnabled = com.poltorashka.documents.rememberAppAnimationsEnabled()
     val resources = LocalResources.current
     val otherDocumentType = stringResource(R.string.document_type_other)
     val docs by viewModel.documents.collectAsState()
@@ -239,7 +240,7 @@ fun ReorderScreen(
                                     shadowElevation = 8.dp.toPx()
                                 }
                         } else {
-                            Modifier.animateItem()
+                            if (animationsEnabled) Modifier.animateItem() else Modifier
                         }
 
                         val rawTitle = if (doc.documentType == "Другое") {

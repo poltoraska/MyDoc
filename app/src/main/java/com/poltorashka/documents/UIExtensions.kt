@@ -2,6 +2,10 @@ import android.view.SoundEffectConstants
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.platform.LocalContext
+import com.poltorashka.documents.UserPreferences
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -24,20 +28,23 @@ fun Modifier.bounceClick(onClick: () -> Unit) = composed {
     // Получает доступ к системе устройства для звука и вибрации
     val view = LocalView.current
     val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+    val prefs = remember(context) { UserPreferences.getInstance(context) }
+    val animationsEnabled by prefs.animationsEnabledFlow.collectAsState()
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.92f else 1f,
-        animationSpec = spring(
+        animationSpec = if (animationsEnabled) spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMediumLow
-        ),
+        ) else snap(),
         label = "bounce"
     )
 
     this
         .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
+            scaleX = if (animationsEnabled) scale else 1f
+            scaleY = if (animationsEnabled) scale else 1f
         }
         .pointerInput(Unit) {
             awaitPointerEventScope {

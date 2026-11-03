@@ -63,6 +63,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
@@ -109,10 +112,20 @@ fun SettingsScreen(
     val resources = LocalResources.current
     val prefs = remember { UserPreferences.getInstance(context) }
     var userName by remember { mutableStateOf(prefs.userName) }
+    var nameSaved by remember { mutableStateOf(false) }
+    var nameSaveCount by remember { mutableStateOf(0) }
+    LaunchedEffect(nameSaved, nameSaveCount) {
+        if (nameSaved) {
+            delay(3_000)
+            nameSaved = false
+        }
+    }
+    val vibrationEnabled by prefs.vibrationEnabledFlow.collectAsState()
     val themeModeState by prefs.themeModeFlow.collectAsState()
     val isDynamicColorState by prefs.dynamicColorFlow.collectAsState()
 
-    var animationsEnabledState by remember { mutableStateOf(prefs.animationsEnabled) }
+    val animationsEnabledState by prefs.animationsEnabledFlow.collectAsState()
+    var screenshotsBlocked by remember { mutableStateOf(prefs.screenshotsBlocked) }
 
     val folders by viewModel.folders.collectAsState()
     val localFolders = remember(folders) { folders.toMutableStateList() }
@@ -183,19 +196,36 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
                     value = userName,
-                    onValueChange = { userName = it },
+                    onValueChange = { userName = it; nameSaved = false },
                     label = { Text(stringResource(R.string.ui_imya)) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.align(Alignment.End).bounceClick { prefs.userName = userName.trim() }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(text = stringResource(R.string.ui_sokhranit), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (nameSaved) stringResource(R.string.profile_name_saved) else "",
+                        modifier = Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.bounceClick {
+                            userName = userName.trim()
+                            prefs.userName = userName
+                            nameSaveCount++
+                            nameSaved = true
+                        }
+                    ) {
+                        Row(modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = stringResource(R.string.ui_sokhranit), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -266,7 +296,7 @@ fun SettingsScreen(
                         }
                 ) {
                     itemsIndexed(localFolders, key = { _, folder -> folder.id }) { index, folder ->
-                        val modifier = if (index == draggingIndex) Modifier.zIndex(1f).graphicsLayer { translationY = draggingItemOffset; shadowElevation = 16.dp.toPx() } else Modifier.animateItem()
+                        val modifier = if (index == draggingIndex) Modifier.zIndex(1f).graphicsLayer { translationY = draggingItemOffset; shadowElevation = 16.dp.toPx() } else if (animationsEnabledState) Modifier.animateItem() else Modifier
                         val itemShape = when {
                             localFolders.size == 1 -> RoundedCornerShape(28.dp)
                             index == 0 -> RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
@@ -309,6 +339,16 @@ fun SettingsScreen(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text(text = stringResource(R.string.ui_vkhod_po_biometrii), fontSize = 16.sp, color = if (isPinEnabledState) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
                     Switch(checked = isBiometricEnabledState, onCheckedChange = { isChecked -> prefs.isBiometricEnabled = isChecked; isBiometricEnabledState = isChecked }, enabled = isPinEnabledState)
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.block_screenshots), fontSize = 16.sp, modifier = Modifier.weight(1f))
+                    Switch(checked = screenshotsBlocked, onCheckedChange = { blocked ->
+                        screenshotsBlocked = blocked
+                        prefs.screenshotsBlocked = blocked
+                        val window = (context as? android.app.Activity)?.window
+                        if (blocked) window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                        else window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                    })
                 }
             }
         }
@@ -379,10 +419,18 @@ fun SettingsScreen(
                     androidx.compose.material3.Switch(
                         checked = animationsEnabledState,
                         onCheckedChange = {
-                            animationsEnabledState = it
                             prefs.animationsEnabled = it // Сохраняем в SharedPreferences
                         }
                     )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.vibration_feedback), fontSize = 16.sp)
+                        Text(stringResource(R.string.vibration_feedback_description), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 16.sp)
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Switch(checked = vibrationEnabled, onCheckedChange = { prefs.vibrationEnabled = it })
                 }
             }
         }
@@ -394,6 +442,7 @@ fun SettingsScreen(
         topBar = {
             Surface(
                 modifier = Modifier
+                    .keepHorizontalGesturesInHeader()
                     .fillMaxWidth()
                     .padding(horizontal = if (isWideScreen) 16.dp else 0.dp)
                     .then(
@@ -731,6 +780,7 @@ fun CustomSwipeToRevealItem(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val animationsEnabled = rememberAppAnimationsEnabled()
     val revealWidth = 144.dp
     val density = LocalDensity.current
     val revealWidthPx = with(density) { revealWidth.toPx() }
@@ -743,11 +793,11 @@ fun CustomSwipeToRevealItem(
     var dragOffsetPx by remember { mutableFloatStateOf(0f) }
     var dragStartOffsetPx by remember { mutableFloatStateOf(0f) }
 
-    LaunchedEffect(isRevealed, revealWidthPx) {
+    LaunchedEffect(isRevealed, revealWidthPx, animationsEnabled) {
         if (!isDraggingHorizontally) {
             animatedOffset.animateTo(
                 targetValue = if (isRevealed) -revealWidthPx else 0f,
-                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                animationSpec = if (animationsEnabled) spring(stiffness = Spring.StiffnessMediumLow) else androidx.compose.animation.core.snap()
             )
         }
     }
@@ -785,7 +835,7 @@ fun CustomSwipeToRevealItem(
                 .graphicsLayer {
                     translationX = if (isDraggingHorizontally) dragOffsetPx else animatedOffset.value
                 }
-                .pointerInput(isRevealed, revealWidthPx) {
+                .pointerInput(isRevealed, revealWidthPx, animationsEnabled) {
                     detectHorizontalDragGestures(
                         onDragStart = {
                             dragStartOffsetPx = animatedOffset.value.coerceIn(-revealWidthPx, 0f)
@@ -806,7 +856,7 @@ fun CustomSwipeToRevealItem(
                                 if (shouldReveal == isRevealed) {
                                     animatedOffset.animateTo(
                                         targetValue = if (shouldReveal) -revealWidthPx else 0f,
-                                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                                        animationSpec = if (animationsEnabled) spring(stiffness = Spring.StiffnessMediumLow) else androidx.compose.animation.core.snap()
                                     )
                                 }
                             }
@@ -818,7 +868,7 @@ fun CustomSwipeToRevealItem(
                                 isDraggingHorizontally = false
                                 animatedOffset.animateTo(
                                     targetValue = if (isRevealed) -revealWidthPx else 0f,
-                                    animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                                    animationSpec = if (animationsEnabled) spring(stiffness = Spring.StiffnessMediumLow) else androidx.compose.animation.core.snap()
                                 )
                             }
                         },

@@ -163,7 +163,7 @@
     <string name="ui_papki">Папки</string>
     <string name="ui_uderzhivayte_chtoby_peremestit_smakhnite_vlevo_c">Удерживайте, чтобы переместить. Смахните влево, чтобы изменить или удалить</string>
     <string name="ui_bezopasnost">Безопасность</string>
-    <string name="ui_nastroyte_sposoby_vkhoda_v_prilozhenie">Настройте способы входа в приложение</string>
+    <string name="ui_nastroyte_sposoby_vkhoda_v_prilozhenie">Настройте вход в приложение и защиту экрана</string>
     <string name="ui_vkhod_po_pin_kodu">Вход по PIN-коду</string>
     <string name="ui_vkhod_po_biometrii">Вход по биометрии</string>
     <string name="ui_rezervnoe_kopirovanie">Резервное копирование</string>
@@ -206,4 +206,18 @@
     <string name="document_form_file">Файл</string>
     <string name="document_saving">Сохранение…</string>
     <string name="document_save_error">Не удалось сохранить документ. Проверьте доступ к выбранным файлам и попробуйте ещё раз.</string>
+    <string name="block_screenshots">Запретить снимки экрана</string>
+    <string name="profile_name_saved">Имя сохранено</string>
+    <string name="vibration_feedback">Виброотклик</string>
+    <string name="vibration_feedback_description">Вибрация при нажатиях, выборе и перемещении элементов</string>
+    <string name="biometric_use_pin">Введите PIN-код или нажмите значок отпечатка, чтобы повторить попытку.</string>
+    <string name="biometric_not_ready">Экран ещё не готов к проверке биометрии. Нажмите значок отпечатка ещё раз или введите PIN-код.</string>
+    <string name="biometric_prompt_error">Биометрия: %1$s (код ошибки: %2$d). Можно войти по PIN-коду.</string>
+    <string name="biometric_availability_error">%1$s (код проверки: %2$d). Можно войти по PIN-коду.</string>
+    <string name="biometric_launch_error">Не удалось открыть биометрию (%1$s). Введите PIN-код.</string>
+    <string name="biometric_no_hardware">Система не обнаружила поддерживаемый биометрический датчик</string>
+    <string name="biometric_hw_unavailable">Биометрический датчик временно недоступен</string>
+    <string name="biometric_not_enrolled">Добавьте отпечаток или другой поддерживаемый способ биометрии в настройках устройства</string>
+    <string name="biometric_security_update">Для биометрии требуется обновление безопасности устройства</string>
+    <string name="biometric_unavailable">Биометрия недоступна</string>
 </resources>

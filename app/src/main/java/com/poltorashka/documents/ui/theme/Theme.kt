@@ -10,6 +10,11 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalRippleConfiguration
+import com.poltorashka.documents.ProvideAppHaptics
+import com.poltorashka.documents.rememberAppAnimationsEnabled
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
@@ -54,6 +59,7 @@ private val LightColorScheme = lightColorScheme(
     onErrorContainer = OnErrorContainerLight
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DocumentsTheme(
     // 1. Параметры, которые будем передавать из настроек
@@ -94,9 +100,15 @@ fun DocumentsTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    val animationsEnabled = rememberAppAnimationsEnabled()
+    val rippleConfiguration = LocalRippleConfiguration.current
+    CompositionLocalProvider(
+        LocalRippleConfiguration provides if (animationsEnabled) rippleConfiguration else null
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = { ProvideAppHaptics(content) }
+        )
+    }
 }
