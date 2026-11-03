@@ -148,7 +148,7 @@ fun AboutAppScreen(onBackClick: () -> Unit) {
                 Column(
                     modifier = Modifier.padding(24.dp)
                 ) {
-                    // КАРТИНКА ВОЛКА
+                    // КАРТИНКА ВОЛКА!!!!!!!!!
                     AsyncImage(
                         model = R.drawable.sleep_wolf,
                         contentDescription = stringResource(R.string.ui_maskot),

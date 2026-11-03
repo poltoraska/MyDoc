@@ -420,7 +420,7 @@ fun SettingsScreen(
                     androidx.compose.material3.Switch(
                         checked = animationsEnabledState,
                         onCheckedChange = {
-                            prefs.animationsEnabled = it // Сохраняем в SharedPreferences
+                            prefs.animationsEnabled = it
                         }
                     )
                 }
@@ -520,7 +520,7 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                // Отступ слева (contentLeftPadding)
+                // Отступ слева
                 .padding(
                     top = (innerPadding.calculateTopPadding() - HeaderCornerRadius).coerceAtLeast(0.dp),
                     start = contentLeftPadding,

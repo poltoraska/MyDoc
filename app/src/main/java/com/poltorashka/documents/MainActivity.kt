@@ -126,7 +126,6 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
-        // Keep even the initial loading window private until recovered preferences are available.
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
         val startup = ViewModelProvider(this)[AppStartupViewModel::class.java]
         var startupContentReady = false
@@ -260,7 +259,6 @@ class MainActivity : FragmentActivity() {
                                 val pagerState = rememberPagerState(pageCount = { 3 })
                                 var retainedPageCount by remember { mutableIntStateOf(0) }
                                 LaunchedEffect(pagerState) {
-                                    // Paint the home screen before preparing the two other tabs.
                                     withFrameNanos { }
                                     withFrameNanos { }
                                     snapshotFlow { pagerState.isScrollInProgress }.first { !it }
@@ -498,7 +496,6 @@ fun MainScreen(
         folderHorizontalPadding
     ) {
         folders.map { folder ->
-            // Reserve enough space for either weight so selection cannot truncate a label.
             val textWidthPx = listOf(FontWeight.Medium, FontWeight.SemiBold).maxOf { weight ->
                 textMeasurer.measure(
                     text = folder.name,
@@ -893,7 +890,7 @@ fun MainScreen(
                             DocumentCard(document = doc, onClick = { onDocumentClick(doc.id) })
                         }
                     }
-                } // <-- Скобка выровнена
+                }
             }
         }
     }
@@ -1005,7 +1002,7 @@ fun DocumentCard(
     }
     val displayTitle = rawTitle.replace(" о ", " о\u00A0")
 
-    // Достаем эмодзи-тег
+    // Достает эмодзи-тег
     val tagEmoji = document.fieldsData[com.poltorashka.documents.data.DocumentTemplates.tagFieldKey]
 
     ElevatedCard(
@@ -1352,8 +1349,8 @@ fun CustomFloatingToolbar(
             }
         }
 
-        // --- Кнопка FAB в форме суперэллипса (Squircle) ---
-        // Это характерная черта стиля Material Expressive
+        // --- Кнопка FAB в форме суперэллипса ---
+        // Это характерная черта стиля Material Expressive!!!!!!!!!!!!
         Surface(
             shape = RoundedCornerShape(16.dp * scale),
             color = MaterialTheme.colorScheme.primaryContainer,
