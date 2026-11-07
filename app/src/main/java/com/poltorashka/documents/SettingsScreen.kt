@@ -45,6 +45,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -338,7 +339,7 @@ fun SettingsScreen(
                     )
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = stringResource(R.string.ui_vkhod_po_biometrii), fontSize = 16.sp, color = if (isPinEnabledState) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
+                    Text(text = stringResource(R.string.ui_vkhod_po_biometrii), fontSize = 16.sp, color = LocalContentColor.current.let { if (isPinEnabledState) it else it.copy(alpha = it.alpha * 0.38f) })
                     Switch(checked = isBiometricEnabledState, onCheckedChange = { isChecked -> prefs.isBiometricEnabled = isChecked; isBiometricEnabledState = isChecked }, enabled = isPinEnabledState)
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
